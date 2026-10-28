@@ -1,0 +1,142 @@
+/* Shared theme refinements: brand colours remain defined in style.css. */
+:root {
+  color-scheme: dark;
+  --status-blue-bg: #1a2244;
+  --status-blue-border: #394a80;
+  --status-green-bg: #142a23;
+  --status-green-border: #2c5748;
+  --status-amber-bg: #302719;
+  --status-amber-border: #654c29;
+  --status-red-bg: #321d22;
+  --status-red-border: #6a3540;
+  --panel-shadow: 0 4px 18px #00000014;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+  --status-blue-bg: #e9edfb;
+  --status-blue-border: #bac7ef;
+  --status-green-bg: #e9f5ed;
+  --status-green-border: #b6d6c2;
+  --status-amber-bg: #fff3df;
+  --status-amber-border: #e1c38f;
+  --status-red-bg: #fceced;
+  --status-red-border: #e2b5bb;
+  --panel-shadow: 0 4px 18px #17244808;
+}
+body { line-height: 1.5; }
+button, input, select, textarea { font-size: 13px; }
+p, .report-text { font-size: 13px; }
+small { font-size: 11px; }
+h2 { font-size: 18px; }
+h3 { font-size: 15px; }
+.field { font-size: 12px; gap: 9px; }
+.eyebrow { font-size: 10px; }
+.nav-item { font-size: 12px; min-height: 46px; }
+.nav-label, .workspace-label { font-size: 10px; letter-spacing: 1.2px; }
+.sidebar { overflow-y: auto; scrollbar-width: thin; }
+.sidebar-user strong { font-size: 12px; }
+.sidebar-user small, .secure, .secure small { font-size: 10px; }
+.sidebar-bottom { padding-top: 22px; }
+.breadcrumb, .top-controls select, .login-as { font-size: 11px; }
+.topbar { min-height: 76px; height: auto; padding-top: 12px; padding-bottom: 12px; }
+.top-controls { gap: 8px; }
+.login-as { max-width: 220px; }
+.page-header { position: relative; border-top: 2px solid #3454d2; }
+.page-header p, .header-actions button { font-size: 12px; }
+.page-header h1 { font-size: clamp(26px, 2.3vw, 34px); }
+.content { max-width: 1740px; margin-inline: auto; }
+.panel { box-shadow: var(--panel-shadow); border-radius: 10px; }
+.panel-heading p, .panel-heading > .link { font-size: 12px; }
+.panel-heading { padding: 22px 24px; }
+.section-line { font-size: 11px; }
+.stat { padding: 20px; position: relative; }
+.stat-top { font-size: 12px; align-items: flex-start; line-height: 1.5; }
+.stat-top svg { color: var(--accent); }
+.stat > strong { font-size: 36px; margin-top: 12px; margin-bottom: 12px; }
+.stat-bottom { font-size: 10px; line-height: 1.5; gap: 8px; }
+.stat:hover { border-color: var(--accent); }
+.alert-stat { border-color: var(--status-amber-border); }
+.alert-stat .stat-top svg { color: var(--amber); }
+table, td strong { font-size: 12px; }
+th { font-size: 11px; padding: 14px 17px; }
+td { padding: 16px 17px; }
+td small, .description p { font-size: 11px; }
+.case-link { font-size: 12px; }
+.chip { font-size: 10px; padding: 5px 8px; border-radius: 5px; }
+.chip.blue, .chip.postex {
+  background: var(--status-blue-bg); border-color: var(--status-blue-border); color: var(--accent);
+}
+.chip.good, .chip.buscaro {
+  background: var(--status-green-bg); border-color: var(--status-green-border); color: var(--green);
+}
+.chip.warning, .chip.daraz {
+  background: var(--status-amber-bg); border-color: var(--status-amber-border); color: var(--amber);
+}
+.chip.danger {
+  background: var(--status-red-bg); border-color: var(--status-red-border); color: var(--red);
+}
+.client-avatar { width: 34px; height: 34px; font-size: 12px; }
+.color-1 { background: var(--status-amber-bg); }
+.color-2 { background: var(--status-green-bg); }
+.inline-muted, .sub-count { font-size: 10px; }
+.bottom-note { font-size: 10px; flex-wrap: wrap; }
+.bottom-note > span { font-size: 9px; }
+.theme-toggle { white-space: nowrap; padding-inline: 12px; }
+.theme-toggle span { font-size: 11px; }
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent);
+}
+textarea::placeholder, input::placeholder { color: var(--muted); opacity: 1; }
+.success { background: var(--status-green-bg); border-color: var(--status-green-border); }
+.notice.error { background: var(--status-red-bg); border-color: var(--status-red-border); }
+.error { font-size: 12px; }
+dl, dd { font-size: 12px; }
+dt, .timeline .facts, .copy-box pre, .work-details > p { font-size: 11px; }
+.work-details > .case-link { white-space: normal; overflow-wrap: anywhere; }
+.form-footer > span, .pagination, .result-count { font-size: 11px; }
+.prototype-tools, .tools-row button { font-size: 11px; }
+.flow-guide { padding: 22px 24px; }
+.flow-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.flow-heading h2 { margin-bottom: 6px; }
+.flow-heading p { color: var(--muted); margin-bottom: 20px; font-size: 12px; }
+.flow-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.flow-step { display: flex; align-items: flex-start; text-align: left; gap: 12px; padding: 16px; background: var(--input); }
+.flow-step > span:last-child { min-width: 0; }
+.flow-number { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 27px; height: 27px; border-radius: 50%; background: var(--soft); color: var(--accent); font-size: 11px; }
+.flow-step strong { display: block; font-size: 12px; margin: 4px 0 7px; }
+.flow-step small { font-size: 11px; line-height: 1.6; white-space: normal; }
+.flow-footnote { margin: 16px 0 0; font-size: 11px; color: var(--muted); }
+:root[data-theme='light'] .page-header { box-shadow: 0 4px 14px #15214812; }
+@media (max-width: 1150px) {
+  .flow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .header-actions button { font-size: 11px; }
+}
+@media (max-width: 800px) {
+  .topbar { padding-block: 10px; }
+  .top-controls select { font-size: 11px; }
+  .section-line { font-size: 10px; }
+  .stat-top { font-size: 11px; }
+  .panel-heading { padding: 18px; }
+  .flow-guide { padding: 20px; }
+}
+@media (max-width: 500px) {
+  .theme-toggle span { display: none; }
+  .theme-toggle { padding: 10px; }
+  .flow-steps { grid-template-columns: 1fr; gap: 9px; }
+  .flow-guide { padding: 18px; }
+  .flow-step { padding: 13px; }
+  .flow-heading { flex-wrap: wrap; }
+  .stat { padding: 15px 12px; }
+  .stat-top { font-size: 11px; }
+  .stat > strong { font-size: 32px; }
+  .stat-bottom { font-size: 10px; }
+  .tabs button, .panel-heading > .link { font-size: 11px; }
+  .section-line > span:last-child { font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+@media print {
+  .flow-guide { display: none; }
+  .panel { box-shadow: none; }
+}

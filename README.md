@@ -1,13 +1,11 @@
-# Mohafiz Incident Workspace
+﻿# Mohafiz Case Desk
 
-React + TypeScript + Vite prototype with fictional data only.
+React 19 + TypeScript + Vite browser prototype, updated to follow the supplied Mohafiz Case Desk HTML prototype. Reference: `prototype-reference.html`.
 
-Run `npm install`, then `npm run dev`. Build with `npm run build`. Data contract tests: `npm test`.
+Run `npm install`, then `npm run dev`. Build: `npm run build`. Existing legacy data-contract checks: `npm test`.
 
-Sample login: officer@mohafiz.demo / demo. Other sample accounts appear on the sign-in screen. Use the labelled Prototype only controls to change roles or simulate a failed save. Client viewer accounts are restricted in the UI and data module.
+Sign in with any valid email and nonempty password, selecting CRO, SFSO, FSO or Client. Choose a company for Client. Sign out to switch roles and continue the same in-memory case workflow. See `WORKFLOW.md` for the complete role and screen guide.
 
-All sample records are held in memory and reset on refresh. Follow-up drafts and theme use browser localStorage. Attachments retain sample metadata, not uploaded file contents; candidate photos are temporary browser previews. Notifications and authentication are simulated. No Google Sheets integration or production identity backend is connected. A real deployment must move authorization and storage behind a server.
+`src/main.tsx` implements the revised role-based desk. `src/theme-desk.css` implements the reference theme and responsive layouts. The prior implementation is preserved in `src/legacy-main.tsx.bak`; `src/data.ts`, its tests and the old styles are retained for reference, but are not used by the revised screens.
 
-The single data module is src/data.ts. Client lists, reference labels, branches, classifications and TAT settings are data-driven. All screens use that module. The demo clock is fixed to 28 October 2026 for repeatable overdue counts. Case IDs are immutable through the save contract; sample sequences are per client and month. The requested flows operate on existing sample cases; no new incident reporting flow was specified.
-
-CSV exports include exactly the applied report rows and protect spreadsheet formula cells. The global client scope is always applied first.
+This is a prototype: authentication, GPS and attachment storage are simulated. Cases, chats and audit history are held in memory until refresh. Only theme preference persists locally. No production backend is connected.

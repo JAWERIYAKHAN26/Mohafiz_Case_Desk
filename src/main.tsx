@@ -8,6 +8,7 @@ import {
   Eye, EyeOff
 } from 'lucide-react';
 import './theme-desk.css';
+import FollowUps, { type Finding } from './FollowUps';
 
 // Page Icons & Categories
 const pageIcons: Record<string, typeof ShieldCheck> = {
@@ -15,6 +16,7 @@ const pageIcons: Record<string, typeof ShieldCheck> = {
   'New Cases': Inbox,
   'Case Board': Columns3,
   'Client Updates': MessagesSquare,
+  'Follow-Ups / Findings': History,
   'Internal Case Group': MessageSquareLock,
   'Case Group': MessageSquareLock,
   'Classification': Tags,
@@ -31,6 +33,7 @@ const categories: Record<string, string> = {
   'New Cases': 'INTAKE',
   'Case Board': 'CASE MANAGEMENT',
   'Client Updates': 'COMMUNICATION',
+  'Follow-Ups / Findings': 'INVESTIGATION',
   'Internal Case Group': 'COMMUNICATION',
   'Case Group': 'COMMUNICATION',
   'Classification': 'INVESTIGATION',
@@ -84,6 +87,7 @@ export type C = {
   accepted?: boolean;
   arrived?: boolean;
   report?: string;
+  findings?: Finding[];
   source?: string;
   acknowledgedAt?: string;
   acknowledgedBy?: string;
@@ -159,7 +163,7 @@ const clientHubs: Record<string, string[]> = {
 };
 
 const nav: Record<string, string[]> = {
-  CRO: ['Today', 'New Cases', 'Case Board', 'Client Updates', 'Internal Case Group', 'Classification', 'Reports', 'Audit Logs'],
+  CRO: ['Today', 'New Cases', 'Case Board', 'Client Updates', 'Internal Case Group', 'Classification', 'Follow-Ups / Findings', 'Reports', 'Audit Logs'],
   SFSO: ['Escalations', 'Case Board', 'Client Updates', 'Internal Case Group', 'Field Team'],
   FSO: ['My Cases', 'Case Group'],
   Client: ['My Cases', 'Raise a Case', 'Client Updates', 'Reports'],
@@ -404,7 +408,19 @@ function App() {
   const [co, setCo] = useState('PostEx');
   const [signed, setSigned] = useState(false);
   const [page, setPage] = useState('Today');
-  const [cases, setCases] = useState<C[]>(initial);
+  const [cases, setCases] = useState<C[]>(() => initial.map((item, index) => ({
+    ...item,
+    findings: index < 3 ? [
+      {
+        text: `SAMPLE FOLLOW-UP\n\nIncident Report\nContacted the ${item.hub} team regarding ${item.issue.toLowerCase()}. The rider's statement has been recorded and the reported location verified. The disputed amount is PKR ${item.amount.toLocaleString()}. Branch records are being collected for reconciliation.\n\nRecommendation\nCompare the rider statement with delivery records and obtain written confirmation from the client before deciding the next action.`,
+        author: 'Shoaib (CRO)', at: '2026-10-28T09:30:00+05:00',
+      },
+      {
+        text: `SAMPLE FOLLOW-UP\n\nLatest Findings\nThe ${item.co} branch supervisor shared the delivery register for review. Initial entries have been checked; payment confirmation and the final supporting statement are still pending.\n\nNext Action\nFollow up with the branch supervisor for missing records. Keep the case open until verification is complete.`,
+        author: 'Shoaib (CRO)', at: '2026-10-29T10:15:00+05:00',
+      },
+    ] : item.findings,
+  })));
   const [activeFsoName, setActiveFsoName] = useState('Sara Ahmed'); // For FSO view switcher
   const [fsoViewMode, setFsoViewMode] = useState<'assigned' | 'city'>('assigned');
   const [logs, setLogs] = useState<{ user: string; action: string; id: string; time: string }[]>([]);
@@ -435,6 +451,8 @@ function App() {
   const [text, setText] = useState('');
   const [notice, setNotice] = useState('');
   const [detail, setDetail] = useState('');
+  const [findingsCaseId, setFindingsCaseId] = useState('');
+  const [findingsDraft, setFindingsDraft] = useState('');
   const [intake, setIntake] = useState(false);
   const [light, setLight] = useState(() => {
     try {
@@ -556,6 +574,11 @@ function App() {
   );
 
   const patch = (c: C, v: Partial<C>, action: string) => {
+    const current = cases.find(item => item.id === c.id) || c;
+    if (v.stage === 'Closed' && !current.findings?.some(finding => finding.text.trim())) {
+      setNotice('Add and save case findings before closing this case.');
+      return;
+    }
     if (v.report) {
       const key = 'i' + c.id;
       setMsgs(all => ({
@@ -826,6 +849,8 @@ function App() {
     select(label, ['All', ...values], f[k] || 'All', v => setF({ ...f, [k]: v }));
 
   const current = visible.find(c => c.id === selected) || visible[0];
+  const clientChannelName = `Mohafiz X ${role === 'Client' ? co : (visible.find(item => item.id === detail) || current)?.co || co}`;
+  const pageLabel = (value: string) => value === 'Client Updates' ? clientChannelName : value;
 
   // Send message or live location in chat
   const send = (channel: string, file?: File, liveLocation = false) => {
@@ -1691,7 +1716,7 @@ function App() {
                     <span className="nav-icon">
                       <Icon size={15} aria-hidden="true" />
                     </span>
-                    {p}
+                    {pageLabel(p)}
                   </button>
                 );
               })}
@@ -1809,7 +1834,7 @@ function App() {
                       ? 'Classify Incidents'
                       : role === 'SFSO' && page === 'Escalations'
                       ? `Escalations — ${sfsoCity} Desk`
-                      : page}
+                      : pageLabel(page)}
                   </h1>
                 </div>
                 {page === 'Classification' && !c && (
@@ -1862,6 +1887,8 @@ function App() {
                         {c.stage !== 'Closed' && (
                           <button
                             onClick={() => closeCaseDirectly(c)}
+                            disabled={!c.findings?.some(finding => finding.text.trim())}
+                            title="Case findings must be saved before closing"
                             style={{
                               background: 'var(--danger-bg)',
                               color: 'var(--danger-text)',
@@ -1971,7 +1998,7 @@ function App() {
 
                     {(role === 'CRO' || role === 'SFSO') && (
                       <div className="bar" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                        {select('Change Stage', stages, c.stage, v => patch(c, { stage: v }, 'Stage changed to ' + v))}
+                        {select('Change Stage', c.findings?.some(finding => finding.text.trim()) ? stages : stages.filter(stage => stage !== 'Closed' || c.stage === 'Closed'), c.stage, v => patch(c, { stage: v }, 'Stage changed to ' + v))}
                         <label>
                           Recovered Amount (PKR)
                           <input
@@ -1998,7 +2025,55 @@ function App() {
                       >
                         Open Case Conversation →
                       </button>
+                      {role === 'CRO' && c.stage !== 'Closed' && (
+                        <button type="button" onClick={() => {
+                          setFindingsCaseId(c.id);
+                          setFindingsDraft('');
+                        }}>
+                          Add Findings
+                        </button>
+                      )}
                     </div>
+                    {c.stage !== 'Closed' && !c.findings?.length && (role === 'CRO' || role === 'SFSO') && (
+                      <p className="sub">Case findings must be added and saved before this case can be closed.</p>
+                    )}
+                    {role === 'CRO' && findingsCaseId === c.id && c.stage !== 'Closed' && (
+                      <form style={{ marginTop: 16 }} onSubmit={e => {
+                        e.preventDefault();
+                        const text = findingsDraft.trim();
+                        if (!text) {
+                          setNotice('Enter case findings before saving.');
+                          return;
+                        }
+                        patch(c, { findings: [...(c.findings || []), {
+                          text, author: name, at: new Date().toISOString(),
+                        }] }, 'Case findings saved');
+                        setFindingsCaseId('');
+                        setFindingsDraft('');
+                      }}>
+                        <label>
+                          Findings for {c.id}
+                          <textarea required rows={4} value={findingsDraft}
+                            onChange={e => setFindingsDraft(e.target.value)}
+                            placeholder="Record the findings related to this case..." />
+                        </label>
+                        <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                          <button className="primary" type="submit" disabled={!findingsDraft.trim()}>Save Findings</button>
+                          <button type="button" onClick={() => { setFindingsCaseId(''); setFindingsDraft(''); }}>Cancel</button>
+                        </div>
+                      </form>
+                    )}
+                    {!!c.findings?.length && (
+                      <section style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+                        <h3>Case Findings</h3>
+                        {c.findings.map((finding, index) => (
+                          <div key={index} style={{ marginTop: 12 }}>
+                            <small>{finding.author} · {new Date(finding.at).toLocaleString()}</small>
+                            <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{finding.text}</p>
+                          </div>
+                        ))}
+                      </section>
+                    )}
                   </div>
                 </>
               ) : intake || page === 'Raise a Case' ? (
@@ -2006,6 +2081,11 @@ function App() {
               ) : (
                 <>
                   {/* Page: Today */}
+                  {page === 'Follow-Ups / Findings' && role === 'CRO' && (
+                    <FollowUps cases={visible} open={setDetail} save={(item, finding) => {
+                      patch(item, { findings: [...(item.findings || []), { ...finding, author: name }] }, 'Case follow-up saved');
+                    }} />
+                  )}
                   {page === 'Today' && (
                     <>
                       <p className="sub">Operational command center. Everything requiring immediate review.</p>

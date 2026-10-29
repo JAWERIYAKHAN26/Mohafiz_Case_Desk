@@ -1685,7 +1685,9 @@ function App() {
                 reportModalCase.findings.map((f, i) => (
                   <div key={i} className="report-finding-card">
                     <div className="report-finding-header">
-                      <b style={{ fontSize: 13 }}>{f.author || 'Chief Response Officer (CRO)'}</b>
+                      <b style={{ fontSize: 13 }}>
+                        {role === 'Client' ? 'CRO' : (f.author || 'Chief Response Officer (CRO)')}
+                      </b>
                       <small style={{ color: 'var(--muted)' }}>
                         {new Date(f.at).toLocaleString()}
                       </small>
@@ -2349,7 +2351,7 @@ function App() {
                             style={{ marginTop: 10, background: 'var(--soft)', borderLeft: '3px solid #087f8c' }}
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <b>{finding.author}</b>
+                              <b>{role === 'Client' ? 'CRO' : (finding.author || 'CRO')}</b>
                               <small style={{ color: 'var(--muted)' }}>
                                 {new Date(finding.at).toLocaleString()}
                               </small>
@@ -3335,9 +3337,23 @@ function App() {
                                         </button>
                                       </div>
                                     ) : (
-                                      <span style={{ color: '#087f8c', fontWeight: 600, fontSize: 11 }}>
-                                        🚀 Dispatched to Field Team ({c.officer || 'SFSO Assigned'})
-                                      </span>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        <span style={{ color: '#087f8c', fontWeight: 600, fontSize: 11 }}>
+                                          🚀 Dispatched to Field Team ({c.officer || 'SFSO Assigned'})
+                                        </span>
+                                        {c.findings && c.findings.length > 0 && (
+                                          <button
+                                            type="button"
+                                            className="loc-pill"
+                                            style={{ fontSize: 10, padding: '3px 8px', color: 'var(--accent)', borderColor: 'var(--border)' }}
+                                            onClick={() => setReportModalCase(c)}
+                                            title="View official resolution report"
+                                          >
+                                            <FileText size={10} />
+                                            <span>View Report</span>
+                                          </button>
+                                        )}
+                                      </div>
                                     )}
                                   </td>
                                 </tr>

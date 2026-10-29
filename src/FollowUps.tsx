@@ -68,7 +68,9 @@ export default function FollowUps({
 }) {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
-  const rows = cases.filter(item => item.id.toLowerCase().includes(search.trim().toLowerCase()));
+  const rows = cases.filter(
+    item => item.stage !== 'Closed' && item.id.toLowerCase().includes(search.trim().toLowerCase())
+  );
   return (
     <>
       <form

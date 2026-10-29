@@ -1669,6 +1669,64 @@ function App() {
               </p>
             </div>
 
+            {/* Follow-Up History (Visible to CRO / Operations Desk, excluded for Client) */}
+            {role !== 'Client' && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Clock size={16} color="#087f8c" />
+                    <span>Follow-Up & Contact History (Internal Desk Records)</span>
+                  </h3>
+                  <small style={{ color: 'var(--muted)' }}>
+                    Internal operations log • Excluded from client report
+                  </small>
+                </div>
+
+                {reportModalCase.followUps && reportModalCase.followUps.length > 0 ? (
+                  reportModalCase.followUps.map((fu, i) => (
+                    <div
+                      key={i}
+                      className="report-finding-card"
+                      style={{ borderLeftColor: '#d97706' }}
+                    >
+                      <div className="report-finding-header">
+                        <b style={{ fontSize: 13 }}>{fu.author || 'Operations Desk'}</b>
+                        <small style={{ color: 'var(--muted)' }}>
+                          {new Date(fu.at).toLocaleString()}
+                        </small>
+                      </div>
+                      <div className="report-finding-text">
+                        {fu.text}
+                      </div>
+                      {fu.attachments && fu.attachments.length > 0 && (
+                        <div className="report-files-wrap">
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Paperclip size={12} />
+                            Follow-Up Attachments:
+                          </span>
+                          {fu.attachments.map((file, fi) => (
+                            <a
+                              key={fi}
+                              href={file.url}
+                              download={file.name}
+                              className="hub-tag"
+                              style={{ textDecoration: 'none', background: 'var(--soft)', color: 'var(--accent)', fontWeight: 600 }}
+                            >
+                              📎 {file.kind ? `${file.kind}: ` : ''}{file.name}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty" style={{ padding: 12, fontSize: 12 }}>
+                    No follow-up entries logged for this case.
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Official Case Findings Section (Saved by CRO before closing) */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -2392,7 +2450,7 @@ function App() {
                   {/* Page: Today */}
                   {page === 'Follow-Ups / Findings' && role === 'CRO' && (
                     <FollowUps
-                      cases={visible}
+                      cases={visible.filter(c => c.stage !== 'Closed')}
                       open={setDetail}
                       save={(item, followUp) => {
                         patch(

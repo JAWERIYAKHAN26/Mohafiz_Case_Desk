@@ -169,7 +169,7 @@ const nav: Record<string, string[]> = {
 const initial: C[] = [
   // Islamabad / Rawalpindi Cases
   {
-    id: 'POS-PIN-OCT-26-126',
+    id: 'POS-RAW-OCT-26-1',
     co: 'PostEx',
     hub: 'PostEx Pindi Hub',
     city: 'Rawalpindi',
@@ -188,7 +188,7 @@ const initial: C[] = [
     description: 'Customer claims parcel received but COD payment of PKR 37,800 was never credited to rider or system.',
   },
   {
-    id: 'DRZ-ISB-OCT-26-127',
+    id: 'DAR-ISL-OCT-26-1',
     co: 'Daraz',
     hub: 'Daraz Islamabad Hub',
     city: 'Islamabad',
@@ -207,7 +207,7 @@ const initial: C[] = [
     description: 'Consignee address discrepancy and physical verification required before releasing high-value electronics consignment.',
   },
   {
-    id: 'POS-ISB-OCT-26-112',
+    id: 'POS-ISL-OCT-26-1',
     co: 'PostEx',
     hub: 'PostEx Islamabad I-9 Hub',
     city: 'Islamabad',
@@ -231,7 +231,7 @@ const initial: C[] = [
 
   // Lahore Cases
   {
-    id: 'BSC-LHR-OCT-26-128',
+    id: 'BUS-LAH-OCT-26-1',
     co: 'Buscaro',
     hub: 'Buscaro Lahore Hub',
     city: 'Lahore',
@@ -250,7 +250,7 @@ const initial: C[] = [
     description: 'Complaint regarding passenger baggage verification and route diversion along Gulberg corridor.',
   },
   {
-    id: 'POS-LHR-OCT-26-118',
+    id: 'POS-LAH-OCT-26-1',
     co: 'PostEx',
     hub: 'PostEx Lahore Gulberg Hub',
     city: 'Lahore',
@@ -275,7 +275,7 @@ const initial: C[] = [
 
   // Karachi Cases
   {
-    id: 'POS-KAR-OCT-26-125',
+    id: 'POS-KAR-OCT-26-1',
     co: 'PostEx',
     hub: 'PostEx Karachi Korangi Hub',
     city: 'Karachi',
@@ -294,7 +294,7 @@ const initial: C[] = [
     description: 'COD collection amount mismatch reported at Korangi hub dispatch desk.',
   },
   {
-    id: 'DRZ-KAR-OCT-26-109',
+    id: 'DAR-KAR-OCT-26-1',
     co: 'Daraz',
     hub: 'Daraz Karachi Central Hub',
     city: 'Karachi',
@@ -318,7 +318,7 @@ const initial: C[] = [
 
   // Peshawar Cases
   {
-    id: 'POS-PEW-OCT-26-129',
+    id: 'POS-PES-OCT-26-1',
     co: 'PostEx',
     hub: 'PostEx Peshawar Central Hub',
     city: 'Peshawar',
@@ -341,7 +341,7 @@ const initial: C[] = [
 
   // Rawalpindi Cases
   {
-    id: 'POS-PIN-OCT-26-130',
+    id: 'POS-RAW-OCT-26-2',
     co: 'PostEx',
     hub: 'PostEx Rawalpindi Satellite Town Hub',
     city: 'Rawalpindi',
@@ -362,7 +362,7 @@ const initial: C[] = [
     description: 'Rider physical altercation during delivery attempt. Assigned to Usman Tariq awaiting confirmation.',
   },
   {
-    id: 'POS-ISB-OCT-26-101',
+    id: 'POS-ISL-OCT-26-2',
     co: 'PostEx',
     hub: 'PostEx Islamabad I-9 Hub',
     city: 'Islamabad',
@@ -409,11 +409,11 @@ function App() {
   const [fsoViewMode, setFsoViewMode] = useState<'assigned' | 'city'>('assigned');
   const [logs, setLogs] = useState<{ user: string; action: string; id: string; time: string }[]>([]);
   const [msgs, setMsgs] = useState<Record<string, Msg[]>>({
-    'cPOS-PIN-OCT-26-126': [
+    'cPOS-RAW-OCT-26-1': [
       { user: 'PostEx user', role: 'Client', text: 'Rider reported payment not credited from commercial market hub.', time: '09:27', type: 'text' },
       { user: 'Mohafiz Operations', role: 'CRO', text: 'Case logged. Reviewing with accounts desk.', time: '09:31', type: 'text' },
     ],
-    'iPOS-LHR-OCT-26-118': [
+    'iPOS-LAH-OCT-26-1': [
       { user: 'Zubair Shah', role: 'FSO', text: 'Reached Mall Road scene. Interviewing eyewitnesses.', time: '10:12', type: 'text' },
       {
         user: 'Zubair Shah',
@@ -571,34 +571,29 @@ function App() {
     setNotice(action + '.');
   };
 
-  // Auto-generate next case ID: e.g. POS-PIN-OCT-26-129
-  const generateNextCaseId = (company: string, city: string) => {
-    const coCode = company === 'PostEx' ? 'POS' : company === 'Daraz' ? 'DRZ' : 'BSC';
-    let cityCode = city.slice(0, 3).toUpperCase();
-    if (city.toLowerCase().includes('pindi') || city.toLowerCase().includes('rawalpindi')) {
-      cityCode = 'PIN';
-    } else if (city.toLowerCase().includes('islamabad')) {
-      cityCode = 'ISB';
-    } else if (city.toLowerCase().includes('karachi')) {
-      cityCode = 'KAR';
-    } else if (city.toLowerCase().includes('lahore')) {
-      cityCode = 'LHR';
-    } else if (city.toLowerCase().includes('peshawar')) {
-      cityCode = 'PEW';
-    }
+  // Exact Case ID generation formula from Excel / Google Sheets:
+  // =IF(AND(ISBLANK(F27), ISBLANK(G27), ISBLANK(C27), ISBLANK(D27)), "", 
+  //  UPPER(CONCATENATE(LEFT(F27, 3), "-", LEFT(G27, 3), "-", LEFT(C27, 3), "-", RIGHT(D27, 2), "-")) 
+  //  & COUNTIFS(C$2:C27, C27, D$2:D27, D27, F$2:F27, F27, G$2:G27, G27))
+  // Format: [CLIENT_3]-[CITY_3]-[MONTH_3]-[YEAR_2]-[COUNTER]
+  const generateNextCaseId = (company: string, city: string, incidentDate = new Date()) => {
+    const clientCode = (company || 'POS').trim().slice(0, 3).toUpperCase();
+    const cityCode = (city || 'RAW').trim().slice(0, 3).toUpperCase();
+    const monthCode = incidentDate.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    const yearCode = String(incidentDate.getFullYear()).slice(-2);
+    const prefix = `${clientCode}-${cityCode}-${monthCode}-${yearCode}-`;
 
-    const numericIds = cases
+    const matchingCases = cases.filter(c => c.id.startsWith(prefix));
+    const numbers = matchingCases
       .map(c => {
-        const parts = c.id.split('-');
-        const lastPart = parts[parts.length - 1];
-        const num = parseInt(lastPart, 10);
+        const suffix = c.id.slice(prefix.length);
+        const num = parseInt(suffix, 10);
         return isNaN(num) ? 0 : num;
       })
-      .filter(n => n > 0);
+      .filter(n => !isNaN(n) && n > 0);
 
-    const maxId = numericIds.length > 0 ? Math.max(...numericIds) : 128;
-    const nextNum = maxId + 1;
-    return `${coCode}-${cityCode}-OCT-26-${nextNum}`;
+    const nextCount = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+    return `${prefix}${nextCount}`;
   };
 
   // CRO Acknowledges Case and sends it to SFSO

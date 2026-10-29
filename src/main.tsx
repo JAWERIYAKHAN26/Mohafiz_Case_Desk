@@ -5,10 +5,18 @@ import {
   Tags, ChartNoAxesCombined, History, ArrowUpRight, Users, BriefcaseBusiness,
   PlusCircle, Sun, Moon, LogOut, UserRound, MapPin, Phone, Clock, Building2,
   CheckCircle2, AlertCircle, Navigation, Radio, Send, X, ExternalLink, Check, AlertTriangle,
-  Eye, EyeOff
+  Eye, EyeOff, FileText, Printer, Paperclip
 } from 'lucide-react';
 import './theme-desk.css';
-import FollowUps, { type Finding } from './FollowUps';
+import FollowUps, { type FollowUpItem } from './FollowUps';
+
+// Dedicated type for official CRO manual findings
+export type CaseFinding = {
+  text: string;
+  author: string;
+  at: string;
+  files?: { name: string; url: string }[];
+};
 
 // Page Icons & Categories
 const pageIcons: Record<string, typeof ShieldCheck> = {
@@ -87,7 +95,8 @@ export type C = {
   accepted?: boolean;
   arrived?: boolean;
   report?: string;
-  findings?: Finding[];
+  findings?: CaseFinding[];
+  followUps?: FollowUpItem[];
   source?: string;
   acknowledgedAt?: string;
   acknowledgedBy?: string;
@@ -173,7 +182,7 @@ const nav: Record<string, string[]> = {
 const initial: C[] = [
   // Islamabad / Rawalpindi Cases
   {
-    id: 'POS-PIN-OCT-26-126',
+    id: 'POS-RAW-OCT-26-1',
     co: 'PostEx',
     hub: 'PostEx Pindi Hub',
     city: 'Rawalpindi',
@@ -192,7 +201,7 @@ const initial: C[] = [
     description: 'Customer claims parcel received but COD payment of PKR 37,800 was never credited to rider or system.',
   },
   {
-    id: 'DRZ-ISB-OCT-26-127',
+    id: 'DAR-ISL-OCT-26-1',
     co: 'Daraz',
     hub: 'Daraz Islamabad Hub',
     city: 'Islamabad',
@@ -211,7 +220,7 @@ const initial: C[] = [
     description: 'Consignee address discrepancy and physical verification required before releasing high-value electronics consignment.',
   },
   {
-    id: 'POS-ISB-OCT-26-112',
+    id: 'POS-ISL-OCT-26-1',
     co: 'PostEx',
     hub: 'PostEx Islamabad I-9 Hub',
     city: 'Islamabad',
@@ -235,7 +244,7 @@ const initial: C[] = [
 
   // Lahore Cases
   {
-    id: 'BSC-LHR-OCT-26-128',
+    id: 'BUS-LAH-OCT-26-1',
     co: 'Buscaro',
     hub: 'Buscaro Lahore Hub',
     city: 'Lahore',
@@ -254,7 +263,7 @@ const initial: C[] = [
     description: 'Complaint regarding passenger baggage verification and route diversion along Gulberg corridor.',
   },
   {
-    id: 'POS-LHR-OCT-26-118',
+    id: 'POS-LAH-OCT-26-1',
     co: 'PostEx',
     hub: 'PostEx Lahore Gulberg Hub',
     city: 'Lahore',
@@ -279,7 +288,7 @@ const initial: C[] = [
 
   // Karachi Cases
   {
-    id: 'POS-KAR-OCT-26-125',
+    id: 'POS-KAR-OCT-26-1',
     co: 'PostEx',
     hub: 'PostEx Karachi Korangi Hub',
     city: 'Karachi',
@@ -298,7 +307,7 @@ const initial: C[] = [
     description: 'COD collection amount mismatch reported at Korangi hub dispatch desk.',
   },
   {
-    id: 'DRZ-KAR-OCT-26-109',
+    id: 'DAR-KAR-OCT-26-1',
     co: 'Daraz',
     hub: 'Daraz Karachi Central Hub',
     city: 'Karachi',
@@ -322,7 +331,7 @@ const initial: C[] = [
 
   // Peshawar Cases
   {
-    id: 'POS-PEW-OCT-26-129',
+    id: 'POS-PES-OCT-26-1',
     co: 'PostEx',
     hub: 'PostEx Peshawar Central Hub',
     city: 'Peshawar',
@@ -345,7 +354,7 @@ const initial: C[] = [
 
   // Rawalpindi Cases
   {
-    id: 'POS-PIN-OCT-26-130',
+    id: 'POS-RAW-OCT-26-2',
     co: 'PostEx',
     hub: 'PostEx Rawalpindi Satellite Town Hub',
     city: 'Rawalpindi',
@@ -366,7 +375,7 @@ const initial: C[] = [
     description: 'Rider physical altercation during delivery attempt. Assigned to Usman Tariq awaiting confirmation.',
   },
   {
-    id: 'POS-ISB-OCT-26-101',
+    id: 'POS-ISL-OCT-26-2',
     co: 'PostEx',
     hub: 'PostEx Islamabad I-9 Hub',
     city: 'Islamabad',
@@ -410,26 +419,36 @@ function App() {
   const [page, setPage] = useState('Today');
   const [cases, setCases] = useState<C[]>(() => initial.map((item, index) => ({
     ...item,
-    findings: index < 3 ? [
+    followUps: index < 3 ? [
       {
-        text: `SAMPLE FOLLOW-UP\n\nIncident Report\nContacted the ${item.hub} team regarding ${item.issue.toLowerCase()}. The rider's statement has been recorded and the reported location verified. The disputed amount is PKR ${item.amount.toLocaleString()}. Branch records are being collected for reconciliation.\n\nRecommendation\nCompare the rider statement with delivery records and obtain written confirmation from the client before deciding the next action.`,
-        author: 'Shoaib (CRO)', at: '2026-10-28T09:30:00+05:00',
+        text: `Incident Follow-Up & Contact Report:\nContacted the ${item.hub} team regarding ${item.issue.toLowerCase()}. The rider's statement has been recorded and the reported location verified. Disputed amount is PKR ${item.amount.toLocaleString()}. Branch records are being collected for reconciliation.`,
+        author: 'Shoaib (CRO)',
+        at: '2026-10-28T09:30:00+05:00',
       },
       {
-        text: `SAMPLE FOLLOW-UP\n\nLatest Findings\nThe ${item.co} branch supervisor shared the delivery register for review. Initial entries have been checked; payment confirmation and the final supporting statement are still pending.\n\nNext Action\nFollow up with the branch supervisor for missing records. Keep the case open until verification is complete.`,
-        author: 'Shoaib (CRO)', at: '2026-10-29T10:15:00+05:00',
+        text: `Follow-Up Update:\nBranch supervisor shared shipment delivery register for audit. Verification in progress.`,
+        author: 'Shoaib (CRO)',
+        at: '2026-10-29T10:15:00+05:00',
       },
-    ] : item.findings,
+    ] : [],
+    findings: item.stage === 'Closed' ? [
+      {
+        text: 'Final Investigation Finding & Closure Report:\nDisputed COD reconciliation confirmed with hub operations. Parcel audit verified and recovered PKR 5,200. Client accounts team notified and resolution certified.',
+        author: 'Shoaib (CRO)',
+        at: '2026-10-28T16:00:00+05:00',
+        files: [{ name: 'Reconciliation_Statement.pdf', url: '#' }],
+      }
+    ] : [],
   })));
   const [activeFsoName, setActiveFsoName] = useState('Sara Ahmed'); // For FSO view switcher
   const [fsoViewMode, setFsoViewMode] = useState<'assigned' | 'city'>('assigned');
   const [logs, setLogs] = useState<{ user: string; action: string; id: string; time: string }[]>([]);
   const [msgs, setMsgs] = useState<Record<string, Msg[]>>({
-    'cPOS-PIN-OCT-26-126': [
+    'cPOS-RAW-OCT-26-1': [
       { user: 'PostEx user', role: 'Client', text: 'Rider reported payment not credited from commercial market hub.', time: '09:27', type: 'text' },
       { user: 'Mohafiz Operations', role: 'CRO', text: 'Case logged. Reviewing with accounts desk.', time: '09:31', type: 'text' },
     ],
-    'iPOS-LHR-OCT-26-118': [
+    'iPOS-LAH-OCT-26-1': [
       { user: 'Zubair Shah', role: 'FSO', text: 'Reached Mall Road scene. Interviewing eyewitnesses.', time: '10:12', type: 'text' },
       {
         user: 'Zubair Shah',
@@ -453,6 +472,9 @@ function App() {
   const [detail, setDetail] = useState('');
   const [findingsCaseId, setFindingsCaseId] = useState('');
   const [findingsDraft, setFindingsDraft] = useState('');
+  const [findingFiles, setFindingFiles] = useState<File[]>([]);
+  const [clientKpiFilter, setClientKpiFilter] = useState<'all' | 'open' | 'waiting' | 'closed'>('all');
+  const [reportModalCase, setReportModalCase] = useState<C | null>(null);
   const [intake, setIntake] = useState(false);
   const [light, setLight] = useState(() => {
     try {
@@ -594,34 +616,29 @@ function App() {
     setNotice(action + '.');
   };
 
-  // Auto-generate next case ID: e.g. POS-PIN-OCT-26-129
-  const generateNextCaseId = (company: string, city: string) => {
-    const coCode = company === 'PostEx' ? 'POS' : company === 'Daraz' ? 'DRZ' : 'BSC';
-    let cityCode = city.slice(0, 3).toUpperCase();
-    if (city.toLowerCase().includes('pindi') || city.toLowerCase().includes('rawalpindi')) {
-      cityCode = 'PIN';
-    } else if (city.toLowerCase().includes('islamabad')) {
-      cityCode = 'ISB';
-    } else if (city.toLowerCase().includes('karachi')) {
-      cityCode = 'KAR';
-    } else if (city.toLowerCase().includes('lahore')) {
-      cityCode = 'LHR';
-    } else if (city.toLowerCase().includes('peshawar')) {
-      cityCode = 'PEW';
-    }
+  // Exact Case ID generation formula from Excel / Google Sheets:
+  // =IF(AND(ISBLANK(F27), ISBLANK(G27), ISBLANK(C27), ISBLANK(D27)), "", 
+  //  UPPER(CONCATENATE(LEFT(F27, 3), "-", LEFT(G27, 3), "-", LEFT(C27, 3), "-", RIGHT(D27, 2), "-")) 
+  //  & COUNTIFS(C$2:C27, C27, D$2:D27, D27, F$2:F27, F27, G$2:G27, G27))
+  // Format: [CLIENT_3]-[CITY_3]-[MONTH_3]-[YEAR_2]-[COUNTER]
+  const generateNextCaseId = (company: string, city: string, incidentDate = new Date()) => {
+    const clientCode = (company || 'POS').trim().slice(0, 3).toUpperCase();
+    const cityCode = (city || 'RAW').trim().slice(0, 3).toUpperCase();
+    const monthCode = incidentDate.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    const yearCode = String(incidentDate.getFullYear()).slice(-2);
+    const prefix = `${clientCode}-${cityCode}-${monthCode}-${yearCode}-`;
 
-    const numericIds = cases
+    const matchingCases = cases.filter(c => c.id.startsWith(prefix));
+    const numbers = matchingCases
       .map(c => {
-        const parts = c.id.split('-');
-        const lastPart = parts[parts.length - 1];
-        const num = parseInt(lastPart, 10);
+        const suffix = c.id.slice(prefix.length);
+        const num = parseInt(suffix, 10);
         return isNaN(num) ? 0 : num;
       })
-      .filter(n => n > 0);
+      .filter(n => !isNaN(n) && n > 0);
 
-    const maxId = numericIds.length > 0 ? Math.max(...numericIds) : 128;
-    const nextNum = maxId + 1;
-    return `${coCode}-${cityCode}-OCT-26-${nextNum}`;
+    const nextCount = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+    return `${prefix}${nextCount}`;
   };
 
   // CRO Acknowledges Case and sends it to SFSO
@@ -1558,6 +1575,232 @@ function App() {
         </div>
       )}
 
+      {/* Official Incident Resolution & Case Findings Report Modal */}
+      {reportModalCase && (
+        <div className="modal-overlay" onClick={() => setReportModalCase(null)}>
+          <div className="report-modal-card" onClick={e => e.stopPropagation()}>
+            <div className="report-doc-header">
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span className="brand-mark" style={{ width: 28, height: 28, padding: 4 }}>
+                    <ShieldCheck size={20} color="#fff" />
+                  </span>
+                  <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '.5px' }}>
+                    MOHAFIZ SECURITY OPERATIONS
+                  </span>
+                </div>
+                <h2 style={{ margin: '4px 0 2px', fontSize: 16, color: 'var(--text)' }}>
+                  Official Incident Investigation & Closure Report
+                </h2>
+                <small style={{ color: 'var(--muted)' }}>
+                  Certified Resolution Document • Case Reference #{reportModalCase.id}
+                </small>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="primary"
+                    style={{ fontSize: 11, padding: '6px 12px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                    onClick={() => window.print()}
+                    title="Print document or save as PDF"
+                  >
+                    <Printer size={13} />
+                    <span>Print / Save PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="modal-close"
+                    onClick={() => setReportModalCase(null)}
+                    aria-label="Close report"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <span className="report-seal-badge">
+                  <CheckCircle2 size={12} />
+                  {reportModalCase.stage === 'Closed' ? 'Official Case Closed' : 'Investigation Report'}
+                </span>
+              </div>
+            </div>
+
+            {/* Case Details Summary Grid */}
+            <div className="report-grid">
+              <div>
+                <div className="report-field-label">Case Identifier</div>
+                <div className="report-field-value">{reportModalCase.id}</div>
+              </div>
+              <div>
+                <div className="report-field-label">Client Company & Hub</div>
+                <div className="report-field-value">{reportModalCase.co} • {reportModalCase.hub || 'Central Hub'}</div>
+              </div>
+              <div>
+                <div className="report-field-label">Incident Type & Date</div>
+                <div className="report-field-value">{reportModalCase.issue} • {reportModalCase.date} ({reportModalCase.incidentTime || '12:00 PM'})</div>
+              </div>
+              <div>
+                <div className="report-field-label">Incident City & Location</div>
+                <div className="report-field-value">📍 {reportModalCase.city} • {reportModalCase.exactLocation || 'Location on file'}</div>
+              </div>
+              <div>
+                <div className="report-field-label">Rider on Duty</div>
+                <div className="report-field-value">{reportModalCase.riderName} ({reportModalCase.riderPhone || 'No Phone'})</div>
+              </div>
+              <div>
+                <div className="report-field-label">Assigned Field Officer</div>
+                <div className="report-field-value">{reportModalCase.officer || 'Operations Team'}</div>
+              </div>
+              <div>
+                <div className="report-field-label">Financial Claim & Recovery</div>
+                <div className="report-field-value">Exposure: PKR {reportModalCase.amount.toLocaleString()} • Recovered: PKR {reportModalCase.recovered.toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="report-field-label">Final Classification</div>
+                <div className="report-field-value">{reportModalCase.cls || 'Genuine'}</div>
+              </div>
+            </div>
+
+            {/* Initial Incident Narrative */}
+            <div style={{ marginBottom: 18, padding: '12px 14px', background: 'var(--soft)', borderRadius: 6, border: '1px solid var(--border)' }}>
+              <div className="report-field-label" style={{ marginBottom: 4 }}>CLIENT REPORTED INCIDENT DESCRIPTION:</div>
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>
+                {reportModalCase.description || 'No initial incident statement supplied.'}
+              </p>
+            </div>
+
+            {/* Follow-Up History (Visible to CRO / Operations Desk, excluded for Client) */}
+            {role !== 'Client' && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Clock size={16} color="#087f8c" />
+                    <span>Follow-Up & Contact History (Internal Desk Records)</span>
+                  </h3>
+                  <small style={{ color: 'var(--muted)' }}>
+                    Internal operations log • Excluded from client report
+                  </small>
+                </div>
+
+                {reportModalCase.followUps && reportModalCase.followUps.length > 0 ? (
+                  reportModalCase.followUps.map((fu, i) => (
+                    <div
+                      key={i}
+                      className="report-finding-card"
+                      style={{ borderLeftColor: '#d97706' }}
+                    >
+                      <div className="report-finding-header">
+                        <b style={{ fontSize: 13 }}>{fu.author || 'Operations Desk'}</b>
+                        <small style={{ color: 'var(--muted)' }}>
+                          {new Date(fu.at).toLocaleString()}
+                        </small>
+                      </div>
+                      <div className="report-finding-text">
+                        {fu.text}
+                      </div>
+                      {fu.attachments && fu.attachments.length > 0 && (
+                        <div className="report-files-wrap">
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Paperclip size={12} />
+                            Follow-Up Attachments:
+                          </span>
+                          {fu.attachments.map((file, fi) => (
+                            <a
+                              key={fi}
+                              href={file.url}
+                              download={file.name}
+                              className="hub-tag"
+                              style={{ textDecoration: 'none', background: 'var(--soft)', color: 'var(--accent)', fontWeight: 600 }}
+                            >
+                              📎 {file.kind ? `${file.kind}: ` : ''}{file.name}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty" style={{ padding: 12, fontSize: 12 }}>
+                    No follow-up entries logged for this case.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Official Case Findings Section (Saved by CRO before closing) */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <FileText size={16} color="#087f8c" />
+                  <span>Official Investigation Findings & Resolution</span>
+                </h3>
+                <small style={{ color: 'var(--muted)' }}>
+                  Recorded by Operations Desk prior to case closure
+                </small>
+              </div>
+
+              {reportModalCase.findings && reportModalCase.findings.length > 0 ? (
+                reportModalCase.findings.map((f, i) => (
+                  <div key={i} className="report-finding-card">
+                    <div className="report-finding-header">
+                      <b style={{ fontSize: 13 }}>
+                        {role === 'Client' ? 'CRO' : (f.author || 'Chief Response Officer (CRO)')}
+                      </b>
+                      <small style={{ color: 'var(--muted)' }}>
+                        {new Date(f.at).toLocaleString()}
+                      </small>
+                    </div>
+                    <div className="report-finding-text">
+                      {f.text}
+                    </div>
+                    {f.files && f.files.length > 0 && (
+                      <div className="report-files-wrap">
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Paperclip size={12} />
+                          Attached Evidence / Documents:
+                        </span>
+                        {f.files.map((file, fi) => (
+                          <a
+                            key={fi}
+                            href={file.url}
+                            download={file.name}
+                            className="hub-tag"
+                            style={{ textDecoration: 'none', background: 'var(--soft)', color: 'var(--accent)', fontWeight: 600 }}
+                          >
+                            📎 {file.name}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="empty" style={{ padding: 18, fontSize: 12 }}>
+                  No official findings have been logged for this case yet.
+                </div>
+              )}
+            </div>
+
+            {/* Report Sign-off & Authority Stamp */}
+            <div className="report-signature-block">
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700 }}>Mohafiz Operations Command</div>
+                <small style={{ color: 'var(--muted)' }}>Verified & Digitally Certified by CRO Desk</small>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  Date of Report: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>Case Status:</div>
+                <b style={{ fontSize: 14, color: reportModalCase.stage === 'Closed' ? '#10b981' : '#f59e0b' }}>
+                  {reportModalCase.stage === 'Closed' ? '✓ CLOSED & RESOLVED' : reportModalCase.stage.toUpperCase()}
+                </b>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {!signed ? (
         <div className="login-page">
           <div className="login-layout">
@@ -2015,7 +2258,7 @@ function App() {
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', gap: 10, marginTop: 15 }}>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 15, flexWrap: 'wrap' }}>
                       <button
                         className="primary"
                         onClick={() => {
@@ -2026,50 +2269,174 @@ function App() {
                         Open Case Conversation →
                       </button>
                       {role === 'CRO' && c.stage !== 'Closed' && (
-                        <button type="button" onClick={() => {
-                          setFindingsCaseId(c.id);
-                          setFindingsDraft('');
-                        }}>
-                          Add Findings
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFindingsCaseId(c.id);
+                            setFindingsDraft('');
+                            setFindingFiles([]);
+                          }}
+                          style={{ fontWeight: 600 }}
+                        >
+                          + Add Findings
+                        </button>
+                      )}
+                      {(c.stage === 'Closed' || (c.findings && c.findings.length > 0)) && (
+                        <button
+                          type="button"
+                          onClick={() => setReportModalCase(c)}
+                          style={{
+                            background: 'var(--soft)',
+                            borderColor: 'var(--border)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontWeight: 600,
+                          }}
+                        >
+                          <FileText size={14} color="#087f8c" />
+                          <span>Generate / Print Case Report</span>
                         </button>
                       )}
                     </div>
                     {c.stage !== 'Closed' && !c.findings?.length && (role === 'CRO' || role === 'SFSO') && (
-                      <p className="sub">Case findings must be added and saved before this case can be closed.</p>
+                      <p className="sub" style={{ color: '#d97706', fontWeight: 500 }}>
+                        ⚠️ Case findings are compulsory before closing this case. Click "+ Add Findings" to record findings and attach files.
+                      </p>
                     )}
                     {role === 'CRO' && findingsCaseId === c.id && c.stage !== 'Closed' && (
-                      <form style={{ marginTop: 16 }} onSubmit={e => {
-                        e.preventDefault();
-                        const text = findingsDraft.trim();
-                        if (!text) {
-                          setNotice('Enter case findings before saving.');
-                          return;
-                        }
-                        patch(c, { findings: [...(c.findings || []), {
-                          text, author: name, at: new Date().toISOString(),
-                        }] }, 'Case findings saved');
-                        setFindingsCaseId('');
-                        setFindingsDraft('');
-                      }}>
+                      <form
+                        style={{
+                          marginTop: 16,
+                          background: 'var(--soft)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 8,
+                          padding: 16,
+                        }}
+                        onSubmit={e => {
+                          e.preventDefault();
+                          const text = findingsDraft.trim();
+                          if (!text) {
+                            setNotice('Enter case findings before saving.');
+                            return;
+                          }
+                          const attached = findingFiles.map(file => ({
+                            name: file.name,
+                            url: URL.createObjectURL(file),
+                          }));
+                          patch(
+                            c,
+                            {
+                              findings: [
+                                ...(c.findings || []),
+                                {
+                                  text,
+                                  author: `${name} (CRO)`,
+                                  at: new Date().toISOString(),
+                                  files: attached,
+                                },
+                              ],
+                            },
+                            'Case findings saved'
+                          );
+                          setFindingsCaseId('');
+                          setFindingsDraft('');
+                          setFindingFiles([]);
+                          setNotice('Findings saved successfully. These will serve as the official case resolution report.');
+                        }}
+                      >
                         <label>
-                          Findings for {c.id}
-                          <textarea required rows={4} value={findingsDraft}
+                          Findings & Closure Report for {c.id} <span className="req">*</span>
+                          <textarea
+                            required
+                            rows={4}
+                            value={findingsDraft}
                             onChange={e => setFindingsDraft(e.target.value)}
-                            placeholder="Record the findings related to this case..." />
+                            placeholder="Record the official investigation findings, reconciliation details, and resolution summary for this case..."
+                          />
                         </label>
-                        <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-                          <button className="primary" type="submit" disabled={!findingsDraft.trim()}>Save Findings</button>
-                          <button type="button" onClick={() => { setFindingsCaseId(''); setFindingsDraft(''); }}>Cancel</button>
+                        <label style={{ marginTop: 10 }}>
+                          Attach Evidence / Documents (Optional)
+                          <input
+                            type="file"
+                            multiple
+                            onChange={e => setFindingFiles(Array.from(e.target.files || []))}
+                            style={{ fontSize: 12, marginTop: 4 }}
+                          />
+                        </label>
+                        {findingFiles.length > 0 && (
+                          <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4 }}>
+                            Selected {findingFiles.length} file(s): {findingFiles.map(f => f.name).join(', ')}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                          <button className="primary" type="submit" disabled={!findingsDraft.trim()}>
+                            Save Findings
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFindingsCaseId('');
+                              setFindingsDraft('');
+                              setFindingFiles([]);
+                            }}
+                          >
+                            Cancel
+                          </button>
                         </div>
                       </form>
                     )}
                     {!!c.findings?.length && (
                       <section style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-                        <h3>Case Findings</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                          <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <FileText size={16} color="#087f8c" />
+                            <span>Official Case Findings</span>
+                          </h3>
+                          <button
+                            type="button"
+                            className="loc-pill"
+                            onClick={() => setReportModalCase(c)}
+                            style={{ fontSize: 11 }}
+                          >
+                            📄 View as Printable Report
+                          </button>
+                        </div>
                         {c.findings.map((finding, index) => (
-                          <div key={index} style={{ marginTop: 12 }}>
-                            <small>{finding.author} · {new Date(finding.at).toLocaleString()}</small>
-                            <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{finding.text}</p>
+                          <div
+                            key={index}
+                            className="box"
+                            style={{ marginTop: 10, background: 'var(--soft)', borderLeft: '3px solid #087f8c' }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <b>{role === 'Client' ? 'CRO' : (finding.author || 'CRO')}</b>
+                              <small style={{ color: 'var(--muted)' }}>
+                                {new Date(finding.at).toLocaleString()}
+                              </small>
+                            </div>
+                            <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', margin: '4px 0' }}>
+                              {finding.text}
+                            </p>
+                            {finding.files && finding.files.length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                                {finding.files.map((file, fi) => (
+                                  <a
+                                    key={fi}
+                                    href={file.url}
+                                    download={file.name}
+                                    className="hub-tag"
+                                    style={{
+                                      textDecoration: 'none',
+                                      background: 'var(--card)',
+                                      color: 'var(--accent)',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    📎 {file.name}
+                                  </a>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </section>
@@ -2082,9 +2449,17 @@ function App() {
                 <>
                   {/* Page: Today */}
                   {page === 'Follow-Ups / Findings' && role === 'CRO' && (
-                    <FollowUps cases={visible} open={setDetail} save={(item, finding) => {
-                      patch(item, { findings: [...(item.findings || []), { ...finding, author: name }] }, 'Case follow-up saved');
-                    }} />
+                    <FollowUps
+                      cases={visible.filter(c => c.stage !== 'Closed')}
+                      open={setDetail}
+                      save={(item, followUp) => {
+                        patch(
+                          item,
+                          { followUps: [...(item.followUps || []), { ...followUp, author: name }] },
+                          'Case follow-up saved'
+                        );
+                      }}
+                    />
                   )}
                   {page === 'Today' && (
                     <>
@@ -2858,23 +3233,89 @@ function App() {
                       <p className="sub">
                         {co} cases intake and tracking. Follow requests from initial logging to resolution.
                       </p>
-                      <div className="stats">
-                        <div className="stat">
-                          <span>Open Cases</span>
+                      {/* Clickable KPI filter cards for Client */}
+                      <div className="stats" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+                        <button
+                          type="button"
+                          className={`stat ${clientKpiFilter === 'open' ? 'active-kpi' : ''}`}
+                          onClick={() => setClientKpiFilter(prev => prev === 'open' ? 'all' : 'open')}
+                          title="Click to filter only open/active cases"
+                          style={{
+                            border: clientKpiFilter === 'open' ? '2px solid #087f8c' : '1px solid var(--border)',
+                            background: clientKpiFilter === 'open' ? 'var(--soft)' : 'var(--card)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>Open Cases</span>
+                            {clientKpiFilter === 'open' && (
+                              <span className="chip primary" style={{ fontSize: 8, padding: '2px 6px' }}>
+                                Selected
+                              </span>
+                            )}
+                          </div>
                           <b>{visible.filter(c => c.stage !== 'Closed').length}</b>
-                          <small>Currently active</small>
-                        </div>
-                        <div className="stat">
-                          <span>Waiting CRO Acknowledgement</span>
+                          <small>Currently active (Click to filter)</small>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`stat ${clientKpiFilter === 'waiting' ? 'active-kpi' : ''}`}
+                          onClick={() => setClientKpiFilter(prev => prev === 'waiting' ? 'all' : 'waiting')}
+                          title="Click to filter cases waiting for CRO acknowledgement"
+                          style={{
+                            border: clientKpiFilter === 'waiting' ? '2px solid #f59e0b' : '1px solid var(--border)',
+                            background: clientKpiFilter === 'waiting' ? 'var(--warning-bg)' : 'var(--card)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>Waiting CRO Acknowledgement</span>
+                            {clientKpiFilter === 'waiting' && (
+                              <span className="chip warning" style={{ fontSize: 8, padding: '2px 6px' }}>
+                                Selected
+                              </span>
+                            )}
+                          </div>
                           <b>{visible.filter(c => c.stage === 'New').length}</b>
-                          <small>In review queue</small>
-                        </div>
-                        <div className="stat">
-                          <span>Closed / Resolved</span>
+                          <small>In review queue (Click to filter)</small>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`stat ${clientKpiFilter === 'closed' ? 'active-kpi' : ''}`}
+                          onClick={() => setClientKpiFilter(prev => prev === 'closed' ? 'all' : 'closed')}
+                          title="Click to filter closed / resolved cases"
+                          style={{
+                            border: clientKpiFilter === 'closed' ? '2px solid #10b981' : '1px solid var(--border)',
+                            background: clientKpiFilter === 'closed' ? '#ecfdf5' : 'var(--card)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>Closed / Resolved</span>
+                            {clientKpiFilter === 'closed' && (
+                              <span className="chip closed" style={{ fontSize: 8, padding: '2px 6px' }}>
+                                Selected
+                              </span>
+                            )}
+                          </div>
                           <b>{visible.filter(c => c.stage === 'Closed').length}</b>
-                          <small>Completed</small>
-                        </div>
+                          <small>Completed (Click to filter)</small>
+                        </button>
                       </div>
+
+                      {clientKpiFilter !== 'all' && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '6px 0 12px', fontSize: 12 }}>
+                          <span>
+                            Filtering table: <b>{clientKpiFilter === 'open' ? 'Open Cases' : clientKpiFilter === 'waiting' ? 'Waiting CRO Acknowledgement' : 'Closed / Resolved'}</b>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setClientKpiFilter('all')}
+                            style={{ padding: '2px 8px', fontSize: 11 }}
+                          >
+                            Clear KPI Filter ✕
+                          </button>
+                        </div>
+                      )}
 
                       <div className="tw">
                         <table>
@@ -2891,59 +3332,100 @@ function App() {
                             </tr>
                           </thead>
                           <tbody>
-                            {visible.map(c => (
-                              <tr key={c.id}>
-                                <td>
-                                  <button
-                                    className="link"
-                                    onClick={() => {
-                                      setDetail(c.id);
-                                      log('Opened case', c.id);
-                                    }}
-                                  >
-                                    <b>{c.id}</b>
-                                  </button>
-                                  <small>{c.date}</small>
-                                </td>
-                                <td>
-                                  <span className="hub-tag">{c.hub || 'Central Hub'}</span>
-                                </td>
-                                <td>
-                                  <b>{c.issue}</b>
-                                  <small>PKR {c.amount.toLocaleString()}</small>
-                                </td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="loc-pill"
-                                    onClick={() => setViewLocCase(c)}
-                                  >
-                                    <MapPin size={11} />
-                                    <span>{c.exactLocation || c.city}</span>
-                                  </button>
-                                </td>
-                                <td>{c.riderName || 'N/A'}</td>
-                                <td>{chip(c.priority)}</td>
-                                <td>{chip(c.stage)}</td>
-                                <td>
-                                  {c.stage === 'New' ? (
-                                    <span style={{ color: '#eab308', fontWeight: 600, fontSize: 11 }}>
-                                      ⏳ Received — Awaiting CRO Acknowledgement
-                                    </span>
-                                  ) : c.stage === 'Closed' ? (
-                                    <span style={{ color: '#10b981', fontWeight: 600, fontSize: 11 }}>
-                                      ✓ Resolved & Closed
-                                    </span>
-                                  ) : (
-                                    <span style={{ color: '#087f8c', fontWeight: 600, fontSize: 11 }}>
-                                      🚀 Dispatched to Field Team ({c.officer || 'SFSO Assigned'})
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
+                            {visible
+                              .filter(c => {
+                                if (clientKpiFilter === 'open') return c.stage !== 'Closed';
+                                if (clientKpiFilter === 'waiting') return c.stage === 'New';
+                                if (clientKpiFilter === 'closed') return c.stage === 'Closed';
+                                return true;
+                              })
+                              .map(c => (
+                                <tr key={c.id}>
+                                  <td>
+                                    <button
+                                      className="link"
+                                      onClick={() => {
+                                        setDetail(c.id);
+                                        log('Opened case', c.id);
+                                      }}
+                                    >
+                                      <b>{c.id}</b>
+                                    </button>
+                                    <small>{c.date}</small>
+                                  </td>
+                                  <td>
+                                    <span className="hub-tag">{c.hub || 'Central Hub'}</span>
+                                  </td>
+                                  <td>
+                                    <b>{c.issue}</b>
+                                    <small>PKR {c.amount.toLocaleString()}</small>
+                                  </td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="loc-pill"
+                                      onClick={() => setViewLocCase(c)}
+                                    >
+                                      <MapPin size={11} />
+                                      <span>{c.exactLocation || c.city}</span>
+                                    </button>
+                                  </td>
+                                  <td>{c.riderName || 'N/A'}</td>
+                                  <td>{chip(c.priority)}</td>
+                                  <td>{chip(c.stage)}</td>
+                                  <td>
+                                    {c.stage === 'New' ? (
+                                      <span style={{ color: '#eab308', fontWeight: 600, fontSize: 11 }}>
+                                        ⏳ Received — Awaiting CRO Acknowledgement
+                                      </span>
+                                    ) : c.stage === 'Closed' ? (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        <span style={{ color: '#10b981', fontWeight: 600, fontSize: 11 }}>
+                                          ✓ Resolved & Closed
+                                        </span>
+                                        <button
+                                          type="button"
+                                          className="loc-pill"
+                                          style={{ fontSize: 10, padding: '3px 8px', color: 'var(--accent)', borderColor: 'var(--border)' }}
+                                          onClick={() => setReportModalCase(c)}
+                                          title="View official resolution report"
+                                        >
+                                          <FileText size={10} />
+                                          <span>View Report</span>
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                        <span style={{ color: '#087f8c', fontWeight: 600, fontSize: 11 }}>
+                                          🚀 Dispatched to Field Team ({c.officer || 'SFSO Assigned'})
+                                        </span>
+                                        {c.findings && c.findings.length > 0 && (
+                                          <button
+                                            type="button"
+                                            className="loc-pill"
+                                            style={{ fontSize: 10, padding: '3px 8px', color: 'var(--accent)', borderColor: 'var(--border)' }}
+                                            onClick={() => setReportModalCase(c)}
+                                            title="View official resolution report"
+                                          >
+                                            <FileText size={10} />
+                                            <span>View Report</span>
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
                           </tbody>
                         </table>
+                        {visible.filter(c => {
+                          if (clientKpiFilter === 'open') return c.stage !== 'Closed';
+                          if (clientKpiFilter === 'waiting') return c.stage === 'New';
+                          if (clientKpiFilter === 'closed') return c.stage === 'Closed';
+                          return true;
+                        }).length === 0 && (
+                          <div className="empty">No matching cases for selected filter.</div>
+                        )}
                       </div>
                     </>
                   )}
@@ -3427,6 +3909,7 @@ function App() {
                               <th>Recovered</th>
                               <th>Officer</th>
                               <th>Status</th>
+                              <th>Official Report</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -3459,6 +3942,18 @@ function App() {
                                 <td>PKR {c.recovered.toLocaleString()}</td>
                                 <td>{c.officer || 'Unassigned'}</td>
                                 <td>{chip(c.stage)}</td>
+                                <td>
+                                  <button
+                                    type="button"
+                                    className="loc-pill"
+                                    style={{ fontWeight: 600, color: 'var(--accent)', borderColor: 'var(--border)' }}
+                                    onClick={() => setReportModalCase(c)}
+                                    title="Generate and print official incident resolution report including findings"
+                                  >
+                                    <FileText size={11} />
+                                    <span>Generate Report</span>
+                                  </button>
+                                </td>
                               </tr>
                             ))}
                           </tbody>

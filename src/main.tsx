@@ -5,7 +5,7 @@ import {
   Tags, ChartNoAxesCombined, History, ArrowUpRight, Users, BriefcaseBusiness,
   PlusCircle, Sun, Moon, LogOut, UserRound, MapPin, Phone, Clock, Building2,
   CheckCircle2, AlertCircle, Navigation, Radio, Send, X, ExternalLink, Check, AlertTriangle,
-  Eye, EyeOff, FileText, Printer, Paperclip
+  Eye, EyeOff, FileText, Printer, Paperclip, Menu
 } from 'lucide-react';
 import './theme-desk.css';
 import FollowUps, { type FollowUpItem } from './FollowUps';
@@ -476,6 +476,7 @@ function App() {
   const [clientKpiFilter, setClientKpiFilter] = useState<'all' | 'open' | 'waiting' | 'closed'>('all');
   const [reportModalCase, setReportModalCase] = useState<C | null>(null);
   const [intake, setIntake] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [light, setLight] = useState(() => {
     try {
       return localStorage.getItem('desk-theme') !== 'dark';
@@ -559,6 +560,7 @@ function App() {
     setNotice('');
     setText('');
     setF({});
+    setMobileNavOpen(false);
     log('Opened ' + p);
   };
 
@@ -1936,8 +1938,27 @@ function App() {
         </div>
       ) : (
         <>
-          <aside>
-            <Brand />
+          {/* Mobile Backdrop Scrim */}
+          {mobileNavOpen && (
+            <div
+              className="mobile-backdrop"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Close mobile navigation"
+            />
+          )}
+
+          <aside className={mobileNavOpen ? 'mobile-open' : ''}>
+            <div className="mobile-drawer-header">
+              <Brand />
+              <button
+                type="button"
+                className="mobile-drawer-close"
+                onClick={() => setMobileNavOpen(false)}
+                aria-label="Close navigation"
+              >
+                <X size={20} />
+              </button>
+            </div>
             <p className="workspace">
               {role === 'Client'
                 ? co
@@ -1975,6 +1996,7 @@ function App() {
                   log('Signed out');
                   setSigned(false);
                   setNotice('');
+                  setMobileNavOpen(false);
                 }}
               >
                 <LogOut size={17} />
@@ -1984,11 +2006,25 @@ function App() {
 
           <main>
             <header>
-              <span className="signed-in">
-                Logged in as <b>{name}</b>
-                <span className="header-role">
-                  {role === 'SFSO' ? `SFSO (${sfsoCity} Region)` : role}
-                </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                {/* Mobile hamburger menu toggle */}
+                <button
+                  type="button"
+                  className="mobile-menu-btn"
+                  onClick={() => setMobileNavOpen(!mobileNavOpen)}
+                  aria-label="Toggle navigation menu"
+                  title="Open navigation menu"
+                >
+                  <Menu size={18} />
+                </button>
+
+                <span className="signed-in">
+                  <span>
+                    Logged in as <b>{name}</b>
+                  </span>
+                  <span className="header-role">
+                    {role === 'SFSO' ? `SFSO (${sfsoCity} Region)` : role}
+                  </span>
 
                 {/* City Desk Switcher for SFSO */}
                 {role === 'SFSO' && (
@@ -2034,7 +2070,8 @@ function App() {
                   </span>
                 )}
               </span>
-              <div className="header-controls">
+            </div>
+            <div className="header-controls">
                 <span className="date">28 October 2026</span>
                 <span className="header-avatar" aria-hidden="true">
                   <UserRound size={16} />
@@ -2622,6 +2659,158 @@ function App() {
                         <b>{sfsoCity} Region</b> field dispatch console. Managing <b>{sfsoCity}</b> cases and <b>{sfsoCity}</b> FSOs.
                       </p>
 
+                      {/* Escalated Cases Table for Assignment in this City (Top Segment) */}
+                      <h2 style={{ marginTop: 16, marginBottom: 8 }}>
+                        {sfsoCity} Cases Awaiting Assignment ({visible.filter(c => c.stage === 'Escalated' && !c.isQueued).length})
+                      </h2>
+                      <div className="tw" style={{ marginBottom: 24 }}>
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Case ID</th>
+                              <th>Client Hub</th>
+                              <th>City</th>
+                              <th>Issue</th>
+                              <th>Exact Location (Client-Reported)</th>
+                              <th>Rider Info</th>
+                              <th>Select {sfsoCity} Officer</th>
+                              <th>Assignment Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {visible
+                              .filter(c => c.stage === 'Escalated' && !c.isQueued)
+                              .map(c => {
+                                const selectedOfficer =
+                                  c.officer ||
+                                  (currentFsoWorkloads.find(w => w.status === 'Free')?.name || visibleFSOs[0]?.name || '');
+                                const chosenWorkload = getFsoWorkload(selectedOfficer);
+
+                                return (
+                                  <tr key={c.id}>
+                                    <td>
+                                      <button
+                                        className="link"
+                                        onClick={() => {
+                                          setDetail(c.id);
+                                          log('Opened case', c.id);
+                                        }}
+                                      >
+                                        <b>{c.id}</b>
+                                      </button>
+                                      <small>{c.date}</small>
+                                    </td>
+                                    <td>
+                                      <div className="co-hub-cell">
+                                        <b>{c.co}</b>
+                                        <span className="hub-tag">{c.hub || 'Hub Not Specified'}</span>
+                                      </div>
+                                    </td>
+                                    <td>
+                                      <b>{c.city}</b>
+                                    </td>
+                                    <td>
+                                      <b>{c.issue}</b>
+                                      <small>PKR {c.amount.toLocaleString()}</small>
+                                      {c.busyReason && (
+                                        <div
+                                          style={{
+                                            background: '#fff1f2',
+                                            border: '1px solid #fecdd3',
+                                            color: '#be123c',
+                                            borderRadius: 6,
+                                            padding: '6px 8px',
+                                            fontSize: 11,
+                                            marginTop: 6,
+                                          }}
+                                        >
+                                          <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <AlertTriangle size={12} style={{ color: '#e11d48' }} />
+                                            Reassignment Requested by {c.busyByOfficer || 'FSO'} ({c.busyReportedAt}):
+                                          </div>
+                                          <div style={{ marginTop: 2, fontStyle: 'italic', color: '#881337' }}>
+                                            "{c.busyReason}"
+                                          </div>
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td>
+                                      {/* Exact location reported by client */}
+                                      <button
+                                        type="button"
+                                        className="loc-pill"
+                                        onClick={() => setViewLocCase(c)}
+                                        title="Click to view exact location on map"
+                                      >
+                                        <MapPin size={12} />
+                                        <span>{c.exactLocation || c.city}</span>
+                                      </button>
+                                    </td>
+                                    <td>
+                                      <div style={{ fontSize: 11 }}>
+                                        <b>{c.riderName || 'N/A'}</b>
+                                        <div style={{ color: 'var(--muted)' }}>{c.riderPhone || 'N/A'}</div>
+                                        <small>Time: {c.incidentTime || 'N/A'}</small>
+                                      </div>
+                                    </td>
+                                    <td>
+                                      <label style={{ minWidth: 220 }}>
+                                        <select
+                                          value={selectedOfficer}
+                                          onChange={e =>
+                                            patch(c, { officer: e.target.value }, 'Officer changed to ' + e.target.value)
+                                          }
+                                        >
+                                          {visibleFSOs.map(o => {
+                                            const w = getFsoWorkload(o.name);
+                                            return (
+                                              <option key={o.name} value={o.name}>
+                                                {o.name} ({o.city}) — {w.status === 'Free' ? '🟢 FREE (Available)' : `🔴 BUSY (${w.activeCount} active, ${w.queuedCount} queued)`}
+                                              </option>
+                                            );
+                                          })}
+                                        </select>
+                                      </label>
+                                    </td>
+                                    <td>
+                                      {chosenWorkload.status === 'Free' ? (
+                                        <button
+                                          className="primary"
+                                          onClick={() => assignCaseBySfso(c, selectedOfficer)}
+                                          title="Officer is free: Dispatch immediately"
+                                        >
+                                          Assign & Dispatch (Immediate)
+                                        </button>
+                                      ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                          <button
+                                            style={{
+                                              background: '#372856',
+                                              borderColor: '#7c3aed',
+                                              color: '#e9d5ff',
+                                              fontSize: 11,
+                                            }}
+                                            onClick={() => assignCaseBySfso(c, selectedOfficer)}
+                                            title="Officer is currently busy: place in their queue"
+                                          >
+                                            Assign as Queued Case (Next in line)
+                                          </button>
+                                          <small style={{ color: '#d8b4fe', fontSize: 10 }}>
+                                            Will execute after current active case
+                                          </small>
+                                        </div>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                        {!visible.some(c => c.stage === 'Escalated' && !c.isQueued) && (
+                          <div className="empty">No {sfsoCity} cases awaiting field officer assignment.</div>
+                        )}
+                      </div>
+
                       {/* Two KPI Cards: Busy FSOs and Free FSOs (Compact) */}
                       <div className="stats" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', margin: '8px 0 14px', gap: 10 }}>
                         {/* KPI 1: Busy FSOs */}
@@ -2823,158 +3012,6 @@ function App() {
                             </tbody>
                           </table>
                         </div>
-                      </div>
-
-                      {/* Escalated Cases Table for Assignment in this City */}
-                      <h2 style={{ marginTop: 24 }}>
-                        {sfsoCity} Cases Awaiting Assignment ({visible.filter(c => c.stage === 'Escalated' && !c.isQueued).length})
-                      </h2>
-                      <div className="tw">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Case ID</th>
-                              <th>Client Hub</th>
-                              <th>City</th>
-                              <th>Issue</th>
-                              <th>Exact Location (Client-Reported)</th>
-                              <th>Rider Info</th>
-                              <th>Select {sfsoCity} Officer</th>
-                              <th>Assignment Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {visible
-                              .filter(c => c.stage === 'Escalated' && !c.isQueued)
-                              .map(c => {
-                                const selectedOfficer =
-                                  c.officer ||
-                                  (currentFsoWorkloads.find(w => w.status === 'Free')?.name || visibleFSOs[0]?.name || '');
-                                const chosenWorkload = getFsoWorkload(selectedOfficer);
-
-                                return (
-                                  <tr key={c.id}>
-                                    <td>
-                                      <button
-                                        className="link"
-                                        onClick={() => {
-                                          setDetail(c.id);
-                                          log('Opened case', c.id);
-                                        }}
-                                      >
-                                        <b>{c.id}</b>
-                                      </button>
-                                      <small>{c.date}</small>
-                                    </td>
-                                    <td>
-                                      <div className="co-hub-cell">
-                                        <b>{c.co}</b>
-                                        <span className="hub-tag">{c.hub || 'Hub Not Specified'}</span>
-                                      </div>
-                                    </td>
-                                    <td>
-                                      <b>{c.city}</b>
-                                    </td>
-                                    <td>
-                                      <b>{c.issue}</b>
-                                      <small>PKR {c.amount.toLocaleString()}</small>
-                                      {c.busyReason && (
-                                        <div
-                                          style={{
-                                            background: '#fff1f2',
-                                            border: '1px solid #fecdd3',
-                                            color: '#be123c',
-                                            borderRadius: 6,
-                                            padding: '6px 8px',
-                                            fontSize: 11,
-                                            marginTop: 6,
-                                          }}
-                                        >
-                                          <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                            <AlertTriangle size={12} style={{ color: '#e11d48' }} />
-                                            Reassignment Requested by {c.busyByOfficer || 'FSO'} ({c.busyReportedAt}):
-                                          </div>
-                                          <div style={{ marginTop: 2, fontStyle: 'italic', color: '#881337' }}>
-                                            "{c.busyReason}"
-                                          </div>
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td>
-                                      {/* Exact location reported by client */}
-                                      <button
-                                        type="button"
-                                        className="loc-pill"
-                                        onClick={() => setViewLocCase(c)}
-                                        title="Click to view exact location on map"
-                                      >
-                                        <MapPin size={12} />
-                                        <span>{c.exactLocation || c.city}</span>
-                                      </button>
-                                    </td>
-                                    <td>
-                                      <div style={{ fontSize: 11 }}>
-                                        <b>{c.riderName || 'N/A'}</b>
-                                        <div style={{ color: 'var(--muted)' }}>{c.riderPhone || 'N/A'}</div>
-                                        <small>Time: {c.incidentTime || 'N/A'}</small>
-                                      </div>
-                                    </td>
-                                    <td>
-                                      <label style={{ minWidth: 220 }}>
-                                        <select
-                                          value={selectedOfficer}
-                                          onChange={e =>
-                                            patch(c, { officer: e.target.value }, 'Officer changed to ' + e.target.value)
-                                          }
-                                        >
-                                          {visibleFSOs.map(o => {
-                                            const w = getFsoWorkload(o.name);
-                                            return (
-                                              <option key={o.name} value={o.name}>
-                                                {o.name} ({o.city}) — {w.status === 'Free' ? '🟢 FREE (Available)' : `🔴 BUSY (${w.activeCount} active, ${w.queuedCount} queued)`}
-                                              </option>
-                                            );
-                                          })}
-                                        </select>
-                                      </label>
-                                    </td>
-                                    <td>
-                                      {chosenWorkload.status === 'Free' ? (
-                                        <button
-                                          className="primary"
-                                          onClick={() => assignCaseBySfso(c, selectedOfficer)}
-                                          title="Officer is free: Dispatch immediately"
-                                        >
-                                          Assign & Dispatch (Immediate)
-                                        </button>
-                                      ) : (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                          <button
-                                            style={{
-                                              background: '#372856',
-                                              borderColor: '#7c3aed',
-                                              color: '#e9d5ff',
-                                              fontSize: 11,
-                                            }}
-                                            onClick={() => assignCaseBySfso(c, selectedOfficer)}
-                                            title="Officer is currently busy: place in their queue"
-                                          >
-                                            Assign as Queued Case (Next in line)
-                                          </button>
-                                          <small style={{ color: '#d8b4fe', fontSize: 10 }}>
-                                            Will execute after current active case
-                                          </small>
-                                        </div>
-                                      )}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                          </tbody>
-                        </table>
-                        {!visible.some(c => c.stage === 'Escalated' && !c.isQueued) && (
-                          <div className="empty">No {sfsoCity} cases awaiting field officer assignment.</div>
-                        )}
                       </div>
                     </>
                   )}
@@ -4010,6 +4047,34 @@ function App() {
               <span>Operations Desk Prototype • Real-time in-memory workflow</span>
             </footer>
           </main>
+
+          {/* Mobile Bottom Quick-Access Thumb Bar (Visible on mobile screens only) */}
+          <nav className="mobile-bottom-bar" aria-label="Mobile Navigation Bar">
+            {nav[role].slice(0, 4).map(p => {
+              const Icon = pageIcons[p];
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  className={'mobile-bottom-item ' + (p === page ? 'active' : '')}
+                  onClick={() => go(p)}
+                  aria-label={p}
+                >
+                  <Icon size={18} />
+                  <span>{pageLabel(p).split(' ')[0]}</span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className={'mobile-bottom-item ' + (mobileNavOpen ? 'active' : '')}
+              onClick={() => setMobileNavOpen(true)}
+              aria-label="All Navigation Pages"
+            >
+              <Menu size={18} />
+              <span>Menu</span>
+            </button>
+          </nav>
         </>
       )}
     </div>

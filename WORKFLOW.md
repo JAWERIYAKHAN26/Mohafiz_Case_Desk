@@ -1,5 +1,7 @@
 # Mohafiz Case Desk workflow
 
+For the full role-by-role screen reference, dashboard definitions, handoffs and current demo rules, see [Role and Dashboard Guide](ROLE_DASHBOARD_GUIDE.md).
+
 The screens follow `prototype-reference.html`, the supplied Mohafiz Case Desk Prototype. The application retains React 19, TypeScript, Vite and CSS. The previous screen implementation is preserved in `src/legacy-main.tsx.bak`; its data module and contract tests remain available.
 
 ## Sign in

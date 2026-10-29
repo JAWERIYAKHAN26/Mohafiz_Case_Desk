@@ -268,3 +268,36 @@ footer { display: flex; justify-content: space-between; gap: 15px; color: var(--
 /* Compulsory form field red asterisks */
 label .req { color: #ef4444; margin-left: 3px; font-weight: 700; }
 
+.follow-ups-table-wrap { overflow-x: auto; }
+.follow-ups-table { width: 100%; min-width: 0; table-layout: fixed; white-space: normal; }
+.follow-ups-table th:nth-child(1) { width: 14%; }
+.follow-ups-table th:nth-child(2) { width: 16%; }
+.follow-ups-table th:nth-child(3) { width: 10%; }
+.follow-ups-table th:nth-child(4) { width: 35%; }
+.follow-ups-table th:nth-child(5) { width: 25%; }
+.follow-ups-table td { vertical-align: top; overflow-wrap: anywhere; }
+.follow-ups-table td:first-child button { margin-top: 12px; }
+.follow-ups-table label { display: block; margin-bottom: 14px; }
+.follow-ups-table input, .follow-ups-table textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+.follow-up-entry { padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.follow-up-text { white-space: pre-wrap; line-height: 1.6; }
+.follow-ups-table th, .follow-ups-table td { padding: 12px 10px; font-size: 12px; }
+.follow-ups-table form button { width: 100%; white-space: normal; }
+.follow-ups-table input[type="file"] { font-size: 11px; padding: 6px; }
+.follow-ups-table td:first-child button { white-space: normal; padding: 6px 8px; }
+.follow-ups-table td p { margin: 8px 0; }
+.follow-ups-table td:nth-child(4) { max-height: none; }
+@media (max-width: 1200px) {
+  .follow-ups-table, .follow-ups-table tbody { display: block; }
+  .follow-ups-table thead { display: none; }
+  .follow-ups-table tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 18px; }
+  .follow-ups-table td { display: block; min-width: 0; border: 0; }
+  .follow-ups-table td::before { content: attr(data-label); display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .follow-ups-table td:nth-child(4) { grid-column: 1 / 3; border-top: 1px solid var(--border); }
+  .follow-ups-table td:nth-child(5) { border-top: 1px solid var(--border); }
+}
+@media (max-width: 600px) {
+  .follow-ups-table tr { grid-template-columns: 1fr; }
+  .follow-ups-table td:nth-child(4) { grid-column: auto; }
+}
+

@@ -5,7 +5,7 @@ import {
   Tags, ChartNoAxesCombined, History, ArrowUpRight, Users, BriefcaseBusiness,
   PlusCircle, Sun, Moon, LogOut, UserRound, MapPin, Phone, Clock, Building2,
   CheckCircle2, AlertCircle, Navigation, Radio, Send, X, ExternalLink, Check, AlertTriangle,
-  Eye, EyeOff, FileText, Printer, Paperclip
+  Eye, EyeOff, FileText, Printer, Paperclip, Menu
 } from 'lucide-react';
 import './theme-desk.css';
 import FollowUps, { type FollowUpItem } from './FollowUps';
@@ -476,6 +476,7 @@ function App() {
   const [clientKpiFilter, setClientKpiFilter] = useState<'all' | 'open' | 'waiting' | 'closed'>('all');
   const [reportModalCase, setReportModalCase] = useState<C | null>(null);
   const [intake, setIntake] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [light, setLight] = useState(() => {
     try {
       return localStorage.getItem('desk-theme') !== 'dark';
@@ -559,6 +560,7 @@ function App() {
     setNotice('');
     setText('');
     setF({});
+    setMobileNavOpen(false);
     log('Opened ' + p);
   };
 
@@ -1936,8 +1938,27 @@ function App() {
         </div>
       ) : (
         <>
-          <aside>
-            <Brand />
+          {/* Mobile Backdrop Scrim */}
+          {mobileNavOpen && (
+            <div
+              className="mobile-backdrop"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Close mobile navigation"
+            />
+          )}
+
+          <aside className={mobileNavOpen ? 'mobile-open' : ''}>
+            <div className="mobile-drawer-header">
+              <Brand />
+              <button
+                type="button"
+                className="mobile-drawer-close"
+                onClick={() => setMobileNavOpen(false)}
+                aria-label="Close navigation"
+              >
+                <X size={20} />
+              </button>
+            </div>
             <p className="workspace">
               {role === 'Client'
                 ? co
@@ -1975,6 +1996,7 @@ function App() {
                   log('Signed out');
                   setSigned(false);
                   setNotice('');
+                  setMobileNavOpen(false);
                 }}
               >
                 <LogOut size={17} />
@@ -1984,11 +2006,25 @@ function App() {
 
           <main>
             <header>
-              <span className="signed-in">
-                Logged in as <b>{name}</b>
-                <span className="header-role">
-                  {role === 'SFSO' ? `SFSO (${sfsoCity} Region)` : role}
-                </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                {/* Mobile hamburger menu toggle */}
+                <button
+                  type="button"
+                  className="mobile-menu-btn"
+                  onClick={() => setMobileNavOpen(!mobileNavOpen)}
+                  aria-label="Toggle navigation menu"
+                  title="Open navigation menu"
+                >
+                  <Menu size={18} />
+                </button>
+
+                <span className="signed-in">
+                  <span>
+                    Logged in as <b>{name}</b>
+                  </span>
+                  <span className="header-role">
+                    {role === 'SFSO' ? `SFSO (${sfsoCity} Region)` : role}
+                  </span>
 
                 {/* City Desk Switcher for SFSO */}
                 {role === 'SFSO' && (
@@ -2034,7 +2070,8 @@ function App() {
                   </span>
                 )}
               </span>
-              <div className="header-controls">
+            </div>
+            <div className="header-controls">
                 <span className="date">28 October 2026</span>
                 <span className="header-avatar" aria-hidden="true">
                   <UserRound size={16} />
@@ -4010,6 +4047,34 @@ function App() {
               <span>Operations Desk Prototype • Real-time in-memory workflow</span>
             </footer>
           </main>
+
+          {/* Mobile Bottom Quick-Access Thumb Bar (Visible on mobile screens only) */}
+          <nav className="mobile-bottom-bar" aria-label="Mobile Navigation Bar">
+            {nav[role].slice(0, 4).map(p => {
+              const Icon = pageIcons[p];
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  className={'mobile-bottom-item ' + (p === page ? 'active' : '')}
+                  onClick={() => go(p)}
+                  aria-label={p}
+                >
+                  <Icon size={18} />
+                  <span>{pageLabel(p).split(' ')[0]}</span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className={'mobile-bottom-item ' + (mobileNavOpen ? 'active' : '')}
+              onClick={() => setMobileNavOpen(true)}
+              aria-label="All Navigation Pages"
+            >
+              <Menu size={18} />
+              <span>Menu</span>
+            </button>
+          </nav>
         </>
       )}
     </div>

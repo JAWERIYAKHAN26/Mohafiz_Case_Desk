@@ -423,6 +423,7 @@ function App() {
   const isSupervisor = role === 'SFSO' || role === 'SOM';
   const [co, setCo] = useState('PostEx');
   const [signed, setSigned] = useState(false);
+  const [signedInEmail, setSignedInEmail] = useState('');
   const [page, setPage] = useState('Today');
   const [cases, setCases] = useState<C[]>(() => initial.map((item, index) => ({
     ...item,
@@ -1041,8 +1042,8 @@ function App() {
                 type="button"
                 className="primary"
                 style={{
-                  background: '#087f8c',
-                  borderColor: '#18a2b2',
+                  background: 'var(--button)',
+                  borderColor: 'var(--button)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 6,
@@ -1385,14 +1386,14 @@ function App() {
   };
 
   return (
-    <div className={'desk ' + (light ? 'light' : '')}>
+    <div className={'desk ' + (!signed || light ? 'light' : '')}>
       {/* Exact Location & Map Preview Modal */}
       {viewLocCase && (
         <div className="modal-overlay" onClick={() => setViewLocCase(null)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <MapPin size={20} color="#087f8c" />
+                <MapPin size={20} color="#246f68" />
                 <h3>Exact Incident Location</h3>
               </div>
               <button className="modal-close" onClick={() => setViewLocCase(null)}>
@@ -1451,7 +1452,7 @@ function App() {
               style={{
                 height: 160,
                 borderRadius: 8,
-                background: 'linear-gradient(135deg, #132238, #1e3557)',
+                background: 'linear-gradient(135deg, #19353e, #2b5660)',
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
@@ -1466,7 +1467,7 @@ function App() {
                   inset: 0,
                   opacity: 0.25,
                   backgroundImage:
-                    'radial-gradient(#6ed4de 1px, transparent 1px), radial-gradient(#6ed4de 1px, transparent 1px)',
+                    'radial-gradient(#70cbbb 1px, transparent 1px), radial-gradient(#70cbbb 1px, transparent 1px)',
                   backgroundSize: '24px 24px',
                   backgroundPosition: '0 0, 12px 12px',
                 }}
@@ -1490,7 +1491,7 @@ function App() {
                 <div style={{ color: '#fff', fontWeight: 600, fontSize: 12, marginTop: 4 }}>
                   {viewLocCase.city} Geo-Grid Verified
                 </div>
-                <small style={{ color: '#a5d8f3' }}>
+                <small style={{ color: '#b9dcd0' }}>
                   {viewLocCase.city === 'Rawalpindi'
                     ? '33.6007° N, 73.0679° E'
                     : viewLocCase.city === 'Karachi'
@@ -1698,7 +1699,7 @@ function App() {
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Clock size={16} color="#087f8c" />
+                    <Clock size={16} color="#246f68" />
                     <span>Follow-Up & Contact History (Internal Desk Records)</span>
                   </h3>
                   <small style={{ color: 'var(--muted)' }}>
@@ -1755,7 +1756,7 @@ function App() {
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <FileText size={16} color="#087f8c" />
+                  <FileText size={16} color="#246f68" />
                   <span>Official Investigation Findings & Resolution</span>
                 </h3>
                 <small style={{ color: 'var(--muted)' }}>
@@ -1828,35 +1829,27 @@ function App() {
       {!signed ? (
         <div className="login-page">
           <div className="login-layout">
-            <section className="login-hero" aria-label="Incident Management System">
+            <section className="login-hero" aria-label="Mohafiz Secure System">
               <div className="login-hero-brand">
-                <span className="ims-mark">IMS</span>
+                <img className="login-logo" src="/images/mohafiz-logo.png" alt="Mohafiz Secure" width={72} height={72} />
                 <span>Secure incident workflow portal</span>
               </div>
               <div className="login-hero-copy">
-                <h1>Incident Management System</h1>
-                <div className="login-features">
-                  {['Intake & Auto-ID', '3 City SFSO Desks', 'Live GPS Tracking', 'Incident Resolution'].map(
-                    feature => (
-                      <span key={feature}>{feature}</span>
-                    )
-                  )}
-                </div>
-                <p>Regional Desks: Islamabad • Lahore • Karachi</p>
+                <h1>Mohafiz<br />Secure System</h1>
+                <p className="login-description">Log incidents, assign them to the right city desk, and follow each one through to resolution.</p>
               </div>
             </section>
 
             <section className="login-card">
               <div className="login-card-heading">
-                <span className="login-mini-mark">IMS</span>
                 <div>
-                  <p>Secure access</p>
                   <h2>Sign in</h2>
                 </div>
               </div>
               <form
                 onSubmit={e => {
                   e.preventDefault();
+                  setSignedInEmail(loginEmail.trim());
                   setSigned(true);
                   setShowPassword(false);
                   setPage(nav[role][0]);
@@ -1949,7 +1942,7 @@ function App() {
                     }
                   }
                 )}
-                <button className="primary full">Sign in →</button>
+                <button className="primary full">Sign in</button>
                 <button
                   className="link"
                   type="button"
@@ -1968,10 +1961,6 @@ function App() {
               )}
             </section>
           </div>
-          <footer className="login-footer">
-            <span>IMS (Incident Management System) • Mohafiz Case Desk</span>
-            <span>Secure. Track. Resolve.</span>
-          </footer>
         </div>
       ) : (
         <>
@@ -1996,16 +1985,7 @@ function App() {
                 <X size={20} />
               </button>
             </div>
-            <p className="workspace">
-              {role === 'Client'
-                ? co
-                : isSupervisor
-                ? `${role} ${sfsoCity} Desk`
-                : role === 'CRO'
-                ? `${name} CRO Desk`
-                : 'Operations workspace'}{' '}
-              <b>{role}</b>
-            </p>
+            <p className="workspace">Mohafiz</p>
             <nav>
               {nav[role].map(p => {
                 const Icon = pageIcons[p];
@@ -2024,23 +2004,6 @@ function App() {
                 );
               })}
             </nav>
-            <div className="user">
-              <div>
-                <b>{name}</b>
-                <small>{isSupervisor ? `${role} ${sfsoCity}` : role}</small>
-              </div>
-              <button
-                aria-label="Sign out"
-                onClick={() => {
-                  log('Signed out');
-                  setSigned(false);
-                  setNotice('');
-                  setMobileNavOpen(false);
-                }}
-              >
-                <LogOut size={17} />
-              </button>
-            </div>
           </aside>
 
           <main>
@@ -2058,12 +2021,6 @@ function App() {
                 </button>
 
                 <span className="signed-in">
-                  <span>
-                    Logged in as <b>{name}</b>
-                  </span>
-                  <span className="header-role">
-                    {isSupervisor ? `${role} (${sfsoCity} Region)` : role}
-                  </span>
 
                 {/* SOM stays on the city selected at sign-in. */}
                 {role === 'SFSO' && (
@@ -2112,9 +2069,29 @@ function App() {
             </div>
             <div className="header-controls">
                 <span className="date">28 October 2026</span>
-                <span className="header-avatar" aria-hidden="true">
-                  <UserRound size={16} />
-                </span>
+                <details className="account-menu" onKeyDown={event => {
+                  if (event.key === 'Escape') {
+                    event.currentTarget.open = false;
+                    event.currentTarget.querySelector('summary')?.focus();
+                  }
+                }}>
+                  <summary className="header-avatar" aria-label="Open account options" title="Account">
+                    <UserRound size={18} />
+                  </summary>
+                  <button className="account-menu-backdrop" type="button" tabIndex={-1} aria-label="Close account options" onClick={event => event.currentTarget.closest('details')?.removeAttribute('open')} />
+                  <div className="account-menu-panel">
+                    <small>Signed in with</small>
+                    <b>{signedInEmail}</b>
+                    <button type="button" onClick={() => {
+                      log('Signed out');
+                      setSigned(false);
+                      setSignedInEmail('');
+                      setShowPassword(false);
+                      setNotice('');
+                      setMobileNavOpen(false);
+                    }}><LogOut size={16} />Log out</button>
+                  </div>
+                </details>
                 <button
                   className="theme-toggle"
                   aria-label="Toggle theme"
@@ -2371,7 +2348,7 @@ function App() {
                             fontWeight: 600,
                           }}
                         >
-                          <FileText size={14} color="#087f8c" />
+                          <FileText size={14} color="#246f68" />
                           <span>Generate / Print Case Report</span>
                         </button>
                       )}
@@ -2467,7 +2444,7 @@ function App() {
                       <section style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                           <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <FileText size={16} color="#087f8c" />
+                            <FileText size={16} color="#246f68" />
                             <span>Official Case Findings</span>
                           </h3>
                           <button
@@ -2483,7 +2460,7 @@ function App() {
                           <div
                             key={index}
                             className="box"
-                            style={{ marginTop: 10, background: 'var(--soft)', borderLeft: '3px solid #087f8c' }}
+                            style={{ marginTop: 10, background: 'var(--soft)', borderLeft: '3px solid #246f68' }}
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                               <b>{role === 'Client' ? 'CRO' : (finding.author || 'CRO')}</b>
@@ -2825,9 +2802,9 @@ function App() {
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                           <button
                                             style={{
-                                              background: '#372856',
-                                              borderColor: '#7c3aed',
-                                              color: '#e9d5ff',
+                                              background: 'var(--button)',
+                                              borderColor: 'var(--button)',
+                                              color: '#ffffff',
                                               fontSize: 11,
                                             }}
                                             onClick={() => assignCaseBySfso(c, selectedOfficer)}
@@ -2835,7 +2812,7 @@ function App() {
                                           >
                                             Assign as Queued Case (Next in line)
                                           </button>
-                                          <small style={{ color: '#d8b4fe', fontSize: 10 }}>
+                                          <small style={{ color: '#826c45', fontSize: 10 }}>
                                             Will execute after current active case
                                           </small>
                                         </div>
@@ -3318,7 +3295,7 @@ function App() {
                           onClick={() => setClientKpiFilter(prev => prev === 'open' ? 'all' : 'open')}
                           title="Click to filter only open/active cases"
                           style={{
-                            border: clientKpiFilter === 'open' ? '2px solid #087f8c' : '1px solid var(--border)',
+                            border: clientKpiFilter === 'open' ? '2px solid #246f68' : '1px solid var(--border)',
                             background: clientKpiFilter === 'open' ? 'var(--soft)' : 'var(--card)',
                           }}
                         >
@@ -3473,7 +3450,7 @@ function App() {
                                       </div>
                                     ) : (
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                        <span style={{ color: '#087f8c', fontWeight: 600, fontSize: 11 }}>
+                                        <span style={{ color: '#246f68', fontWeight: 600, fontSize: 11 }}>
                                           🚀 Dispatched to Field Team ({c.officer || 'SFSO Assigned'})
                                         </span>
                                         {c.findings && c.findings.length > 0 && (
@@ -3822,7 +3799,7 @@ function App() {
 
                       {/* Section 2: Queued / Upcoming Cases (To do after current case) */}
                       <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#bd9851', textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span>📋 Upcoming Queued Cases ({visible.filter(c => c.isQueued && c.stage !== 'Closed').length})</span>
                         </div>
 
@@ -3832,7 +3809,7 @@ function App() {
                             <div
                               className="box"
                               key={c.id}
-                              style={{ borderLeft: '3px solid #8b5cf6', background: 'var(--card)' }}
+                              style={{ borderLeft: '3px solid #bd9851', background: 'var(--card)' }}
                             >
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span className="queued-badge">Upcoming Case #{idx + 1}</span>
@@ -3854,7 +3831,7 @@ function App() {
 
                               <button
                                 className="primary full"
-                                style={{ background: '#7c3aed', borderColor: '#8b5cf6' }}
+                                style={{ background: 'var(--button)', borderColor: 'var(--button)' }}
                                 onClick={() =>
                                   patch(
                                     c,

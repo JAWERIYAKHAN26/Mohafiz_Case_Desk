@@ -276,3 +276,18 @@ Saved findings enable case closure under the existing closure rule.
 The Escalations screen also provides a city-scoped findings and field-report
 review section, including links to details and printable findings. Cases remain
 available there for review after they leave the assignment queue.
+
+
+### CRO simplified navigation
+
+The CRO sidebar now contains Dashboard, Internal Case Group, Mohafiz X Client
+(labelled with the selected case company), Case Board, Reports and Audit Logs.
+Dashboard replaces Today and retains the same overview, counts and recent activity.
+The compact Open New Cases button in the pending-review banner opens the existing
+New Cases screen with its filters, intake and acknowledgement actions. New Cases
+is a Dashboard subpage, with Dashboard highlighted and a Back to Dashboard button.
+Classification and Follow-Ups / Findings are no longer separate CRO sidebar tabs.
+Other roles retain their existing navigation.
+
+New-stage case details do not offer Add Findings, the findings form, or the prompt
+to add findings. In progress, Hold and Closed case behavior remains unchanged.

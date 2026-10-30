@@ -8,10 +8,11 @@ import {
   Eye, EyeOff, FileText, Printer, Paperclip, Menu
 } from 'lucide-react';
 import './theme-desk.css';
-import FollowUps, { type FollowUpItem } from './FollowUps';
+import FollowUps, { FollowUpForm, type FollowUpItem } from './FollowUps';
 
 // Dedicated type for official CRO manual findings
 export type CaseFinding = {
+  kind?: 'classification';
   text: string;
   author: string;
   at: string;
@@ -20,7 +21,7 @@ export type CaseFinding = {
 
 // Page Icons & Categories
 const pageIcons: Record<string, typeof ShieldCheck> = {
-  'Today': LayoutDashboard,
+  'Dashboard': LayoutDashboard,
   'New Cases': Inbox,
   'Case Board': Columns3,
   'Client Updates': MessagesSquare,
@@ -37,7 +38,7 @@ const pageIcons: Record<string, typeof ShieldCheck> = {
 };
 
 const categories: Record<string, string> = {
-  'Today': 'OVERVIEW',
+  'Dashboard': 'OVERVIEW',
   'New Cases': 'INTAKE',
   'Case Board': 'CASE MANAGEMENT',
   'Client Updates': 'COMMUNICATION',
@@ -175,7 +176,7 @@ const sfsoPages = ['Escalations', 'Case Board', 'Client Updates', 'Internal Case
 const somPages = ['Case Board', 'Client Updates', 'Internal Case Group', 'Field Team', 'Follow-Ups / Findings', 'Audit Logs'];
 
 const nav: Record<string, string[]> = {
-  CRO: ['Today', 'New Cases', 'Case Board', 'Client Updates', 'Internal Case Group', 'Classification', 'Follow-Ups / Findings', 'Reports', 'Audit Logs'],
+  CRO: ['Dashboard', 'Internal Case Group', 'Client Updates', 'Case Board', 'Reports', 'Audit Logs'],
   SFSO: sfsoPages,
   SOM: somPages,
   FSO: ['My Cases', 'Case Group'],
@@ -424,7 +425,7 @@ function App() {
   const [co, setCo] = useState('PostEx');
   const [signed, setSigned] = useState(false);
   const [signedInEmail, setSignedInEmail] = useState('');
-  const [page, setPage] = useState('Today');
+  const [page, setPage] = useState('Dashboard');
   const [cases, setCases] = useState<C[]>(() => initial.map((item, index) => ({
     ...item,
     followUps: index < 3 ? [
@@ -478,6 +479,9 @@ function App() {
   const [text, setText] = useState('');
   const [notice, setNotice] = useState('');
   const [detail, setDetail] = useState('');
+  const [boardCity, setBoardCity] = useState('');
+  const [boardStatus, setBoardStatus] = useState('');
+  const [inlineFollowUpCase, setInlineFollowUpCase] = useState('');
   const [findingsCaseId, setFindingsCaseId] = useState('');
   const [findingsDraft, setFindingsDraft] = useState('');
   const [findingFiles, setFindingFiles] = useState<File[]>([]);
@@ -617,7 +621,7 @@ function App() {
       setNotice('Only a CRO can add case findings.');
       return;
     }
-    if (v.stage === 'Closed' && !current.findings?.some(finding => finding.text.trim())) {
+    if (v.stage === 'Closed' && !current.findings?.some(finding => finding.kind !== 'classification' && finding.text.trim())) {
       setNotice('Add and save case findings before closing this case.');
       return;
     }
@@ -1992,8 +1996,8 @@ function App() {
                 return (
                   <button
                     key={p}
-                    className={p === page ? 'active' : ''}
-                    aria-current={p === page ? 'page' : undefined}
+                    className={p === page || (p === 'Dashboard' && page === 'New Cases') ? 'active' : ''}
+                    aria-current={p === page || (p === 'Dashboard' && page === 'New Cases') ? 'page' : undefined}
                     onClick={() => go(p)}
                   >
                     <span className="nav-icon">
@@ -2109,7 +2113,7 @@ function App() {
               </div>
             </header>
 
-            <section className="content">
+            <section className={c ? "content case-detail-content" : "content"}>
               <div className="heading">
                 <div>
                   <div className="eyebrow">
@@ -2139,9 +2143,12 @@ function App() {
                   </button>
                 )}
                 {page === 'New Cases' && (
-                  <button className="primary" onClick={() => setIntake(!intake)}>
-                    {intake ? 'Cancel' : '+ Log a case'}
-                  </button>
+                  <div className="actions">
+                    <button type="button" onClick={() => go('Dashboard')}>Back to Dashboard</button>
+                    <button className="primary" onClick={() => setIntake(!intake)}>
+                      {intake ? 'Cancel' : '+ Log a case'}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -2183,7 +2190,7 @@ function App() {
                         {c.stage !== 'Closed' && (
                           <button
                             onClick={() => closeCaseDirectly(c)}
-                            disabled={!c.findings?.some(finding => finding.text.trim())}
+                            disabled={!c.findings?.some(finding => finding.kind !== 'classification' && finding.text.trim())}
                             title="Case findings must be saved before closing"
                             style={{
                               background: 'var(--danger-bg)',
@@ -2198,24 +2205,14 @@ function App() {
                     )}
                   </div>
 
-                  <div className="box">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <h2>{c.id}</h2>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        {chip(c.priority)}
-                        {chip(c.stage)}
-                        {c.isQueued && (
-                          <span className="queued-badge">
-                            Queued Task #{c.queueOrder || 1}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 12 }}>
-                      Company: <b>{c.co}</b> • Hub: <b>{c.hub || 'Central Hub'}</b> • City: <b>{c.city}</b> • Issue:{' '}
-                      <b>{c.issue}</b>
-                    </p>
+                  <div className="field-service-layout">
+                  <div className="box field-service-main">
+                    <div className="service-title"><div><small>FIELD SERVICE ? {c.city}</small><h2>{c.issue} ? {c.riderName || c.co}</h2></div>{chip(c.stage)}</div>
+                    <dl className="service-fields">{[['Project', 'Field Service'], ['Case ID', c.id], ['Category', c.issue], ['Customer', c.co], ['City', c.city], ['Hub', c.hub], ['Assigned to', c.officer || 'Unassigned'], ['Reported date', c.date], ['Contact', c.riderName], ['Incident time', c.incidentTime]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || 'Not recorded'}</dd></div>)}</dl>
+                    <div className="service-tabs"><button type="button" aria-expanded="true" aria-controls="case-description">Description</button></div>
+                    <section id="case-description" className="service-tab-content" aria-label="Description">
+                    <p>{c.description || 'No description recorded.'}</p>
+                    <div className="service-case-reference">{chip(c.priority)} {c.isQueued && <span className="queued-badge">Queued Task #{c.queueOrder || 1}</span>}</div>
 
                     {/* Exact Location & Rider Card */}
                     <div
@@ -2277,7 +2274,6 @@ function App() {
                       </div>
                     </div>
 
-                    <p style={{ margin: '14px 0', lineHeight: 1.6 }}>{c.description}</p>
                     <p style={{ fontSize: 12, color: 'var(--muted)' }}>
                       Exposure: PKR {c.amount.toLocaleString()} • Recovered: PKR {c.recovered.toLocaleString()}
                     </p>
@@ -2293,9 +2289,10 @@ function App() {
                     {c.initialRemarks && <p>Initial remarks: {c.initialRemarks}</p>}
                     {c.report && <p>Field report: {c.report}</p>}
 
+                    </section>
+
                     {(role === 'CRO' || isSupervisor) && (
                       <div className="bar" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                        {select('Change Stage', role === 'CRO' ? stages : stages.filter(stage => stage !== 'Closed' || c.stage === 'Closed'), c.stage, v => patch(c, { stage: v }, 'Stage changed to ' + v))}
                         <label>
                           Recovered Amount (PKR)
                           <input
@@ -2353,7 +2350,7 @@ function App() {
                         </button>
                       )}
                     </div>
-                    {c.stage !== 'Closed' && !c.findings?.length && role === 'CRO' && (
+                    {c.stage !== 'Closed' && !c.findings?.some(finding => finding.kind !== 'classification' && finding.text.trim()) && role === 'CRO' && (
                       <p className="sub" style={{ color: '#d97706', fontWeight: 500 }}>
                         ⚠️ Case findings are compulsory before closing this case. Click "+ Add Findings" to record findings and attach files.
                       </p>
@@ -2496,12 +2493,41 @@ function App() {
                       </section>
                     )}
                   </div>
+                  <section className="service-activity box" aria-label="Case notes and activity">
+                    <div className="service-activity-actions"><button onClick={() => { setSelected(c.id); go(role === 'FSO' ? 'Case Group' : 'Client Updates'); }}>Send message</button>{(role === 'CRO' || isSupervisor) && <button type="button" aria-expanded={inlineFollowUpCase === c.id} aria-controls="inline-follow-up" onClick={() => setInlineFollowUpCase(current => current === c.id ? '' : c.id)}>Log notes</button>}</div>
+                    {(role === 'CRO' || isSupervisor) && inlineFollowUpCase === c.id && (
+                      <section id="inline-follow-up" className="inline-follow-up log-note-composer" aria-label="Log an internal note">
+                        <span className="note-avatar" aria-hidden="true"><UserRound size={18} /></span>
+                        <FollowUpForm key={c.id} item={c} showClassification noteMode onClassificationChange={classification => {
+                          if (classification === c.cls) return;
+                          patch(c, {
+                            cls: classification,
+                            findings: [...(c.findings || []).filter(finding => finding.kind !== 'classification'), {
+                              kind: 'classification',
+                              text: `Classification: ${classification}`,
+                              author: `${name} (${role})`,
+                              at: new Date().toISOString(),
+                            }],
+                          }, 'Classification saved to findings: ' + classification);
+                          setNotice('Classification saved automatically to Findings.');
+                        }} save={(item, followUp, classification) => {
+                          patch(item, { followUps: [...(item.followUps || []), { ...followUp, author: name }], cls: classification ?? item.cls }, 'Internal note logged');
+                          setNotice('Note and classification saved.');
+                        }} />
+                      </section>
+                    )}
+                    <h3>Case activity</h3>
+                    {visibleLogs.filter(entry => entry.id === c.id).length === 0 && <p className="sub">No activity recorded yet.</p>}
+                    {visibleLogs.filter(entry => entry.id === c.id).map((entry, index) => <article className="service-event" key={entry.at + '-' + index}><small>{entry.time}</small><b>{entry.user}</b><p>{entry.action}</p></article>)}
+                    {(c.followUps || []).map((entry, index) => <article className="service-event" key={'follow-' + index}><small>{new Date(entry.at).toLocaleString()}</small><b>{entry.author}</b><p>{entry.text}</p>{entry.attachments?.map((file, index) => <a className="service-evidence" key={index} href={file.url} download={file.name}>{file.kind}: {file.name}</a>)}</article>)}
+                  </section>
+                  </div>
                 </>
               ) : intake || page === 'Raise a Case' ? (
                 intakeForm
               ) : (
                 <>
-                  {/* Page: Today */}
+                  {/* Dashboard and follow-ups */}
                   {page === 'Follow-Ups / Findings' && (role === 'CRO' || isSupervisor) && (
                     <FollowUps
                       cases={visible.filter(c => c.stage !== 'Closed')}
@@ -2515,7 +2541,7 @@ function App() {
                       }}
                     />
                   )}
-                  {page === 'Today' && (
+                  {page === 'Dashboard' && (
                     <>
                       <p className="sub">Operational command center. Everything requiring immediate review.</p>
                       <div className="stats">
@@ -2554,7 +2580,7 @@ function App() {
                             Acknowledge incoming cases to auto-notify clients with generated reference IDs and forward to city SFSO desks.
                           </p>
                         </div>
-                        <button className="primary" onClick={() => go('New Cases')}>
+                        <button className="primary new-cases-button" onClick={() => go('New Cases')}>
                           Open New Cases →
                         </button>
                       </div>
@@ -2579,18 +2605,22 @@ function App() {
                   {/* Page: New Cases (CRO) - Rider Info REMOVED as requested */}
                   {page === 'New Cases' && (
                     <>
-                      <p className="sub">
-                        Review incoming client cases across all regions. Acknowledge them to auto-dispatch to their respective city SFSO, or resolve directly.
-                      </p>
-                      <div className="bar">
-                        {filter('co', 'Company', companies)}
-                        {filter('city', 'City', cities)}
-                        {filter('priority', 'Priority', ['High', 'Medium', 'Low'])}
-                      </div>
-
                       <div className="tw">
                         <table>
                           <thead>
+                            <tr>
+                              <th colSpan={7} className="new-cases-filter-cell">
+                                <div className="new-cases-filters">
+                                  <label className="new-cases-search">
+                                    <span className="sr-only">Search Case ID</span>
+                                    <input type="search" placeholder="Search by Case ID..." value={f.search || ''} onChange={event => setF(values => ({ ...values, search: event.target.value }))} />
+                                  </label>
+                                  {filter('co', 'Company', companies)}
+                                  {filter('city', 'City', cities)}
+                                  {filter('priority', 'Priority', ['High', 'Medium', 'Low'])}
+                                </div>
+                              </th>
+                            </tr>
                             <tr>
                               <th>Case ID</th>
                               <th>Company & Hub</th>
@@ -2598,7 +2628,6 @@ function App() {
                               <th>Issue</th>
                               <th>Exact Location</th>
                               <th>Priority</th>
-                              <th>Status</th>
                               <th>Actions</th>
                             </tr>
                           </thead>
@@ -2644,7 +2673,6 @@ function App() {
                                     </button>
                                   </td>
                                   <td>{chip(c.priority)}</td>
-                                  <td>{chip(c.stage)}</td>
                                   <td>
                                     <div className="actions">
                                       {/* Only Primary Acknowledge and Send to SFSO */}
@@ -2654,7 +2682,7 @@ function App() {
                                         onClick={() => acknowledgeCaseToSfso(c)}
                                         title={`Acknowledge case: auto-sends ID to client and dispatches to SFSO ${c.city}`}
                                       >
-                                        Acknowledge & send to SFSO
+                                        Acknowledge
                                       </button>
                                     </div>
                                   </td>
@@ -3094,29 +3122,31 @@ function App() {
                   {/* Page: Case Board (Filtered by Role & City for SFSO) */}
                   {page === 'Case Board' && (
                     <>
-                      <p className="sub">
-                        {isSupervisor
-                          ? `Six stages board for ${sfsoCity} Region cases.`
-                          : 'Six stages. One unified operational board of every case.'}
-                      </p>
-                      <div className="board">
-                        {stages.map(s => (
-                          <section className="column" key={s}>
+                      <div className="city-board-filters">
+                        <label>City<select value={boardCity} onChange={e => setBoardCity(e.target.value)}><option value="">All cities</option>{Array.from(new Set(visible.map(item => item.city))).sort().map(city => <option key={city}>{city}</option>)}</select></label>
+                        <label>Status<select value={boardStatus} onChange={e => setBoardStatus(e.target.value)}><option value="">All statuses</option>{['Open', 'Closed', 'Hold', 'In progress'].map(status => <option key={status}>{status}</option>)}</select></label>
+                        <span>City-wise case board</span>
+                      </div>
+                      <div className="board city-board">
+                        {Array.from(new Set(visible.map(item => item.city))).sort().filter(city => !boardCity || city === boardCity).map(city => {
+                          const cityCases = visible.filter(item => item.city === city && (!boardStatus || (boardStatus === 'Open' ? item.stage !== 'Closed' : item.stage === boardStatus)));
+                          return (
+                          <section className="column" key={city}>
                             <h3>
-                              {s}
-                              <span>{visible.filter(c => c.stage === s).length}</span>
+                              {city}
+                              <span>{cityCases.length}</span>
                             </h3>
-                            {visible
-                              .filter(c => c.stage === s)
-                              .map(c => (
+                            {cityCases.length === 0 && <p className="city-empty">No cases match this status.</p>}
+                            {cityCases.map(c => (
                                 <button
                                   className="card"
                                   key={c.id}
-                                  onClick={() => setDetail(c.id)}
+                                  onClick={() => { setDetail(c.id); setInlineFollowUpCase(''); log('Opened case', c.id); }}
                                 >
                                   <div>
                                     {chip(c.co)}
                                     {chip(c.priority)}
+                                    {chip(c.stage)}
                                     {c.isQueued && (
                                       <span className="queued-badge" style={{ fontSize: 9 }}>
                                         Queued
@@ -3148,7 +3178,7 @@ function App() {
                                 </button>
                               ))}
                           </section>
-                        ))}
+                        ); })}
                       </div>
                     </>
                   )}
@@ -4080,7 +4110,7 @@ function App() {
                 <button
                   key={p}
                   type="button"
-                  className={'mobile-bottom-item ' + (p === page ? 'active' : '')}
+                  className={'mobile-bottom-item ' + (p === page || (p === 'Dashboard' && page === 'New Cases') ? 'active' : '')}
                   onClick={() => go(p)}
                   aria-label={p}
                 >

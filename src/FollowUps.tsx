@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { Paperclip, X } from 'lucide-react';
 import type { C } from './main';
 
 export type FollowUpItem = {
@@ -8,12 +9,25 @@ export type FollowUpItem = {
   attachments?: { name: string; kind: string; url: string }[];
 };
 
-function FollowUpForm({ item, save }: { item: C; save: (item: C, followUp: FollowUpItem) => void }) {
+export function FollowUpForm({ item, save, showClassification = false, noteMode = false, onClassificationChange }: { item: C; save: (item: C, followUp: FollowUpItem, classification?: string) => void; showClassification?: boolean; noteMode?: boolean; onClassificationChange?: (classification: string) => void }) {
+  const noteFileInput = useRef<HTMLInputElement>(null);
+  const [classification, setClassification] = useState(item.cls || '');
   const [report, setReport] = useState('');
   const [evidence, setEvidence] = useState<File[]>([]);
   const [other, setOther] = useState<File[]>([]);
   return (
-    <form
+    <form className={noteMode ? 'log-note-form' : undefined}
+      onBlur={event => {
+        if (noteMode && report.trim() && event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) {
+          event.currentTarget.requestSubmit();
+        }
+      }}
+      onKeyDown={event => {
+        if (noteMode && event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          event.currentTarget.requestSubmit();
+        }
+      }}
       onSubmit={event => {
         event.preventDefault();
         if (!report.trim()) return;
@@ -25,7 +39,7 @@ function FollowUpForm({ item, save }: { item: C; save: (item: C, followUp: Follo
             ...evidence.map(file => ({ name: file.name, kind: 'Evidence', url: URL.createObjectURL(file) })),
             ...other.map(file => ({ name: file.name, kind: 'Other evidence', url: URL.createObjectURL(file) })),
           ],
-        });
+        }, showClassification ? classification : undefined);
         setReport('');
         setEvidence([]);
         setOther([]);
@@ -33,15 +47,23 @@ function FollowUpForm({ item, save }: { item: C; save: (item: C, followUp: Follo
       }}
     >
       <label>
-        Follow-Up Report <span className="req">*</span>
+        <span className={noteMode ? 'sr-only' : undefined}>{noteMode ? 'Internal note' : 'Follow-Up Report'} <span className="req">*</span></span>
         <textarea
           required
-          rows={6}
+          rows={noteMode ? 3 : 6}
           value={report}
           onChange={e => setReport(e.target.value)}
-          placeholder="Incident report, follow-up progress and recommendations..."
+          placeholder={noteMode ? 'Log an internal note...' : 'Incident report, follow-up progress and recommendations...'}
         />
       </label>
+      {noteMode ? <div className="note-attachments">
+        <input ref={noteFileInput} type="file" multiple hidden onChange={event => {
+          setEvidence(files => [...files, ...Array.from(event.target.files || [])]);
+          event.target.value = '';
+        }} />
+        <button type="button" className="note-attach-icon" aria-label="Attach files" title="Attach files" onClick={() => noteFileInput.current?.click()}><Paperclip size={18} /></button>
+        {evidence.length > 0 && <ul className="note-file-list">{evidence.map((file, index) => <li key={index}><span>{file.name}</span><button type="button" aria-label={'Remove ' + file.name} onClick={() => setEvidence(files => files.filter((_, i) => i !== index))}><X size={13} /></button></li>)}</ul>}
+      </div> : <>
       <label>
         Upload Evidence
         <input type="file" multiple onChange={e => setEvidence(Array.from(e.target.files || []))} />
@@ -50,9 +72,23 @@ function FollowUpForm({ item, save }: { item: C; save: (item: C, followUp: Follo
         Upload Other Evidence
         <input type="file" multiple onChange={e => setOther(Array.from(e.target.files || []))} />
       </label>
-      <button type="submit" className="primary" disabled={!report.trim()}>
+      </>}
+      {showClassification && <label>
+        Classification
+        <select value={classification} onChange={event => {
+          const value = event.target.value;
+          setClassification(value);
+          if (value) onClassificationChange?.(value);
+        }}>
+          <option value="" disabled={!!onClassificationChange}>Select classification</option>
+          <option value="Fraud">Fraud</option>
+          <option value="Genuine">Genuine</option>
+          <option value="Negligence">Negligence</option>
+        </select>
+      </label>}
+      {noteMode ? <small>Notes save when you leave this form. Press Ctrl+Enter to save now.</small> : <button type="submit" className="primary" disabled={!report.trim()}>
         Submit Follow-Up
-      </button>
+      </button>}
     </form>
   );
 }

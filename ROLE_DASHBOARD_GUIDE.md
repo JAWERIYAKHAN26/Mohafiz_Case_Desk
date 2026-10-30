@@ -121,7 +121,7 @@ Client Updates supports external case communication with the client and CRO. Int
 
 Shows each demo officer, a fixed display city, active-case count and Hold count. Active means every assigned case except Closed, so Hold cases are included in active counts as well as shown separately. The city column is a demo officer mapping, not live location.
 
-SFSO has no Classification, Reports, Audit Logs or case-intake page in its navigation.
+SFSO has Audit Logs in its navigation, but no Classification, Reports or case-intake page.
 
 ### SFSO process outline
 
@@ -235,3 +235,44 @@ For flowcharts, represent the following as enforced checks: valid intake fields,
 - Officer identity and displayed officer cities are fixed demo values. Only Ali Raza has an FSO login option.
 - Classification does not automatically close a case; reports and dashboards recalculate from current session records.
 - There is no separate administrator dashboard, approval workflow, unread-message tracking, TAT calculation or automatic SLA escalation.
+
+
+## SOM city desks and shared supervision
+
+Sign in using SOM Karachi, SOM Lahore or SOM Islamabad. SOM has the same
+Escalations, Case Board, client conversation, Internal Case Group and Field Team
+screens and actions as SFSO. Both roles also have Audit Logs in the sidebar.
+Each desk sees its city's cases, officers and activity; Islamabad includes
+Rawalpindi, matching the existing SFSO desk coverage.
+
+FSO **Submit & Send to SFSO and SOM** records the unable-to-proceed reason,
+returns the case to Escalated and posts the submission to the shared internal
+case group. Both city supervisors see the same case awaiting reassignment.
+SOM can read and send messages in both Mohafiz X Client and Internal Case Group.
+
+Audit entries identify the actor and role, action, case, and full timestamp
+including seconds in Pakistan time (PKT). Sent text and attachment names are
+included in message audit entries. The interval since the previous recorded
+activity for the same case is shown; this is an activity interval, not a read
+receipt or delivery timer. New chat messages also show full PKT timestamps.
+SFSO and SOM audit views are restricted to their desk's city coverage.
+
+All changes remain in the current page's memory. Switch roles by signing out
+and back in on the same page to demonstrate the shared workflow. Refreshing
+resets the session; separate browser sessions do not synchronize.
+
+
+### SOM city login and supervisor findings access
+
+SOM stays on the city chosen at sign-in; there is no SOM city-switch dropdown.
+Sign out and select another city login to use a different SOM desk.
+SFSO and SOM share one navigation configuration and the same escalation actions,
+including immediate dispatch, queued assignments and reassignment. Assignments
+must use an officer in the active desk's city coverage.
+
+Both supervisors have Follow-Ups / Findings in the sidebar. Open a case to
+add official findings and attachments, save them, and generate/print its report.
+Saved findings enable case closure under the existing closure rule.
+The Escalations screen also provides a city-scoped findings and field-report
+review section, including links to details and printable findings. Cases remain
+available there for review after they leave the assignment queue.

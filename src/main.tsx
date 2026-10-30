@@ -171,9 +171,12 @@ const clientHubs: Record<string, string[]> = {
   ],
 };
 
+const supervisorPages = ['Escalations', 'Case Board', 'Client Updates', 'Internal Case Group', 'Field Team', 'Follow-Ups / Findings', 'Audit Logs'];
+
 const nav: Record<string, string[]> = {
   CRO: ['Today', 'New Cases', 'Case Board', 'Client Updates', 'Internal Case Group', 'Classification', 'Follow-Ups / Findings', 'Reports', 'Audit Logs'],
-  SFSO: ['Escalations', 'Case Board', 'Client Updates', 'Internal Case Group', 'Field Team'],
+  SFSO: supervisorPages,
+  SOM: supervisorPages,
   FSO: ['My Cases', 'Case Group'],
   Client: ['My Cases', 'Raise a Case', 'Client Updates', 'Reports'],
 };
@@ -414,6 +417,7 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState('CRO');
   const [sfsoCity, setSfsoCity] = useState<'Islamabad' | 'Lahore' | 'Karachi'>('Islamabad'); // 3 SFSOs
+  const isSupervisor = role === 'SFSO' || role === 'SOM';
   const [co, setCo] = useState('PostEx');
   const [signed, setSigned] = useState(false);
   const [page, setPage] = useState('Today');
@@ -442,7 +446,7 @@ function App() {
   })));
   const [activeFsoName, setActiveFsoName] = useState('Sara Ahmed'); // For FSO view switcher
   const [fsoViewMode, setFsoViewMode] = useState<'assigned' | 'city'>('assigned');
-  const [logs, setLogs] = useState<{ user: string; action: string; id: string; time: string }[]>([]);
+  const [logs, setLogs] = useState<{ user: string; action: string; id: string; time: string; at: number; role: string; city: string }[]>([]);
   const [msgs, setMsgs] = useState<Record<string, Msg[]>>({
     'cPOS-RAW-OCT-26-1': [
       { user: 'PostEx user', role: 'Client', text: 'Rider reported payment not credited from commercial market hub.', time: '09:27', type: 'text' },
@@ -503,8 +507,8 @@ function App() {
   const name =
     role === 'CRO'
       ? 'Shoaib'
-      : role === 'SFSO'
-      ? `${activeSfso.name} (${sfsoCity})`
+      : isSupervisor
+      ? role === 'SOM' ? `SOM ${sfsoCity}` : `${activeSfso.name} (${sfsoCity})`
       : role === 'FSO'
       ? activeFsoName
       : co + ' user';
@@ -545,13 +549,10 @@ function App() {
   };
 
   const time = () =>
-    new Date().toLocaleTimeString('en-GB', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    new Date().toLocaleString('en-GB', { timeZone: 'Asia/Karachi', year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' PKT';
 
   const log = (action: string, id = '—') =>
-    setLogs(v => [{ user: name + ' • ' + role, action, id, time: time() }, ...v]);
+    setLogs(v => [{ user: name + ' • ' + role, action, id, time: time(), at: Date.now(), role, city: cases.find(c => c.id === id)?.city || (isSupervisor ? sfsoCity : role === 'FSO' ? fsoCity : '') }, ...v]);
 
   const go = (p: string) => {
     setPage(p);
@@ -572,15 +573,17 @@ function App() {
   const visible = cases.filter(c => {
     if (role === 'Client') return c.co === co;
     if (role === 'FSO') return c.officer === name;
-    if (role === 'SFSO') return sfsoCityMatches(c.city, sfsoCity);
+    if (isSupervisor) return sfsoCityMatches(c.city, sfsoCity);
     return true; // CRO sees all
   });
 
   // FSOs visible to the user:
   // SFSO only sees FSOs in their city!
   const visibleFSOs = officers.filter(o =>
-    role === 'SFSO' ? sfsoCityMatches(o.city, sfsoCity) : true
+    isSupervisor ? sfsoCityMatches(o.city, sfsoCity) : true
   );
+
+  const visibleLogs = logs.filter(entry => !isSupervisor || sfsoCityMatches(entry.city, sfsoCity));
 
   const filtered = visible.filter(c =>
     Object.entries(f).every(
@@ -743,13 +746,13 @@ function App() {
         busyByOfficer: name,
         busyReportedAt: time(),
       },
-      `Reported unable to proceed by ${name}: escalated back to SFSO for reassignment`
+      `Reported unable to proceed by ${name}: escalated back to SFSO and SOM for reassignment`
     );
 
     const internalMsg: Msg = {
       user: `${name} (FSO)`,
       role: 'FSO',
-      text: `⚠️ Field Officer ${name} reported unable to proceed with Case #${caseItem.id}: "${reason.trim()}". Case escalated back to SFSO for reassignment to another officer.`,
+      text: `⚠️ Field Officer ${name} reported unable to proceed with Case #${caseItem.id}: "${reason.trim()}". Case escalated back to SFSO and SOM for reassignment to another officer.`,
       time: time(),
       type: 'text',
     };
@@ -766,6 +769,11 @@ function App() {
 
   // SFSO Assigns Case to Officer (Initial or Reassignment)
   const assignCaseBySfso = (caseItem: C, chosenOfficer: string) => {
+    if (!isSupervisor || !visible.some(item => item.id === caseItem.id) ||
+        !visibleFSOs.some(officer => officer.name === chosenOfficer)) {
+      setNotice('Select an officer from your city desk before assigning this case.');
+      return;
+    }
     const workload = getFsoWorkload(chosenOfficer);
     const internalKey = 'i' + caseItem.id;
     const wasReassigned = Boolean(caseItem.busyReason);
@@ -792,9 +800,9 @@ function App() {
       );
 
       const internalMsg: Msg = {
-        user: `${name} (SFSO)`,
-        role: 'SFSO',
-        text: `🚨 Case #${caseItem.id} assigned to Field Officer ${chosenOfficer} by SFSO ${name} (Queued Task #${newQueueOrder})${reassignedNote}. Priority: ${caseItem.priority}. Location: ${caseItem.exactLocation || caseItem.city}.`,
+        user: `${name} (${role})`,
+        role,
+        text: `🚨 Case #${caseItem.id} assigned to Field Officer ${chosenOfficer} by ${role} ${name} (Queued Task #${newQueueOrder})${reassignedNote}. Priority: ${caseItem.priority}. Location: ${caseItem.exactLocation || caseItem.city}.`,
         time: time(),
         type: 'text',
       };
@@ -823,13 +831,13 @@ function App() {
           busyByOfficer: undefined,
           busyReportedAt: undefined,
         },
-        `Assigned to ${chosenOfficer} by SFSO — Awaiting FSO Acknowledgement${reassignedNote}`
+        `Assigned to ${chosenOfficer} by ${role} — Awaiting FSO Acknowledgement${reassignedNote}`
       );
 
       const internalMsg: Msg = {
-        user: `${name} (SFSO)`,
-        role: 'SFSO',
-        text: `🚨 Case #${caseItem.id} assigned to Field Officer ${chosenOfficer} by SFSO ${name} (Immediate Dispatch)${reassignedNote}. Location: ${caseItem.exactLocation || caseItem.city}.`,
+        user: `${name} (${role})`,
+        role,
+        text: `🚨 Case #${caseItem.id} assigned to Field Officer ${chosenOfficer} by ${role} ${name} (Immediate Dispatch)${reassignedNote}. Location: ${caseItem.exactLocation || caseItem.city}.`,
         time: time(),
         type: 'text',
       };
@@ -912,15 +920,15 @@ function App() {
       ],
     }));
     setText('');
-    log(channel === 'c' ? 'Client message sent' : 'Internal message sent', current.id);
+    log((channel === 'c' ? 'Client message sent: ' : 'Internal message sent: ') + (file ? 'Attachment: ' + file.name : text.trim()), current.id);
   };
 
   const chat = (channel: string) => (
     <>
       <p className="sub">
         {channel === 'c'
-          ? 'Shared communication channel between Client, CRO and SFSO.'
-          : 'Staff-only operational channel: CRO, SFSO, and assigned Field Security Officers (FSOs).'}
+          ? 'Shared communication channel between Client, CRO, SFSO and SOM.'
+          : 'Staff-only operational channel: CRO, SFSO, SOM, and assigned Field Security Officers (FSOs).'}
       </p>
       <div className="bar">
         {select('Select Case', visible.map(c => c.id), current?.id || '', setSelected)}
@@ -1544,7 +1552,7 @@ function App() {
                 Case: <b>{busyModalCase.id}</b> • {busyModalCase.issue}
               </p>
               <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 12px', lineHeight: 1.5 }}>
-                Explain why you are currently busy or working elsewhere and cannot take this dispatch. Your note will be recorded and the case will be escalated back to SFSO for immediate reassignment.
+                Explain why you are currently busy or working elsewhere and cannot take this dispatch. Your note will be recorded and the case will be escalated back to SFSO and SOM for immediate reassignment.
               </p>
               <label>
                 Reason Description <span className="req">*</span>
@@ -1567,7 +1575,7 @@ function App() {
                 disabled={busyReasonText.trim().length < 5}
                 onClick={() => handleFsoReportBusy(busyModalCase, busyReasonText)}
               >
-                Submit & Send to SFSO
+                Submit & Send to SFSO and SOM
               </button>
               <button type="button" onClick={() => setBusyModalCase(null)}>
                 Cancel
@@ -1876,6 +1884,9 @@ function App() {
                     'SFSO Islamabad (Ahmed)',
                     'SFSO Lahore (Hamza)',
                     'SFSO Karachi (Tariq)',
+                    'SOM Islamabad',
+                    'SOM Lahore',
+                    'SOM Karachi',
                     'FSO Islamabad (Sara Ahmed)',
                     'FSO Rawalpindi (Usman Tariq)',
                     'FSO Lahore (Zubair Shah)',
@@ -1887,8 +1898,8 @@ function App() {
                   ],
                   role === 'Client'
                     ? 'Client ' + co
-                    : role === 'SFSO'
-                    ? `SFSO ${sfsoCity} (${sfsoDesks[sfsoCity].name})`
+                    : isSupervisor
+                    ? role === 'SOM' ? `SOM ${sfsoCity}` : `SFSO ${sfsoCity} (${sfsoDesks[sfsoCity].name})`
                     : role === 'FSO'
                     ? `FSO ${fsoCity} (${activeFsoName})`
                     : role,
@@ -1896,8 +1907,8 @@ function App() {
                     if (value.startsWith('Client ')) {
                       setRole('Client');
                       setCo(value.slice(7));
-                    } else if (value.startsWith('SFSO ')) {
-                      setRole('SFSO');
+                    } else if (value.startsWith('SFSO ') || value.startsWith('SOM ')) {
+                      setRole(value.startsWith('SOM ') ? 'SOM' : 'SFSO');
                       if (value.includes('Lahore')) setSfsoCity('Lahore');
                       else if (value.includes('Karachi')) setSfsoCity('Karachi');
                       else setSfsoCity('Islamabad');
@@ -1962,8 +1973,8 @@ function App() {
             <p className="workspace">
               {role === 'Client'
                 ? co
-                : role === 'SFSO'
-                ? `SFSO ${sfsoCity} Desk`
+                : isSupervisor
+                ? `${role} ${sfsoCity} Desk`
                 : 'Operations workspace'}{' '}
               <b>{role}</b>
             </p>
@@ -1988,7 +1999,7 @@ function App() {
             <div className="user">
               <div>
                 <b>{name}</b>
-                <small>{role === 'SFSO' ? `SFSO ${sfsoCity}` : role}</small>
+                <small>{isSupervisor ? `${role} ${sfsoCity}` : role}</small>
               </div>
               <button
                 aria-label="Sign out"
@@ -2023,10 +2034,10 @@ function App() {
                     Logged in as <b>{name}</b>
                   </span>
                   <span className="header-role">
-                    {role === 'SFSO' ? `SFSO (${sfsoCity} Region)` : role}
+                    {isSupervisor ? `${role} (${sfsoCity} Region)` : role}
                   </span>
 
-                {/* City Desk Switcher for SFSO */}
+                {/* SOM stays on the city selected at sign-in. */}
                 {role === 'SFSO' && (
                   <span style={{ marginLeft: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <small style={{ color: 'var(--muted)', fontWeight: 600 }}>Switch City Desk:</small>
@@ -2035,13 +2046,13 @@ function App() {
                       onChange={e => {
                         const newCity = e.target.value as 'Islamabad' | 'Lahore' | 'Karachi';
                         setSfsoCity(newCity);
-                        setNotice(`Switched to SFSO ${newCity} Desk (${sfsoDesks[newCity].name}). Showing ${newCity} cases & FSOs.`);
+                        setNotice(`Switched to ${role} ${newCity} Desk. Showing ${newCity} cases & FSOs.`);
                       }}
                       style={{ height: 28, fontSize: 11, padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}
                     >
-                      <option value="Islamabad">Islamabad / Rawalpindi (Ahmed)</option>
-                      <option value="Lahore">Lahore (Hamza)</option>
-                      <option value="Karachi">Karachi (Tariq)</option>
+                      <option value="Islamabad">Islamabad / Rawalpindi {role === 'SFSO' ? '(Ahmed)' : '(SOM)'}</option>
+                      <option value="Lahore">Lahore {role === 'SFSO' ? '(Hamza)' : '(SOM)'}</option>
+                      <option value="Karachi">Karachi {role === 'SFSO' ? '(Tariq)' : '(SOM)'}</option>
                     </select>
                   </span>
                 )}
@@ -2103,8 +2114,8 @@ function App() {
                       ? 'INTAKE'
                       : page === 'Classification'
                       ? 'SECURITY • PENDING CLASSIFICATION'
-                      : role === 'SFSO'
-                      ? `SFSO ${sfsoCity.toUpperCase()} • ${categories[page]}`
+                      : isSupervisor
+                      ? `${role} ${sfsoCity.toUpperCase()} • ${categories[page]}`
                       : categories[page]}
                   </div>
                   <h1>
@@ -2112,7 +2123,7 @@ function App() {
                       ? `Case ${c.id}`
                       : page === 'Classification'
                       ? 'Classify Incidents'
-                      : role === 'SFSO' && page === 'Escalations'
+                      : isSupervisor && page === 'Escalations'
                       ? `Escalations — ${sfsoCity} Desk`
                       : pageLabel(page)}
                   </h1>
@@ -2276,7 +2287,7 @@ function App() {
                     {c.initialRemarks && <p>Initial remarks: {c.initialRemarks}</p>}
                     {c.report && <p>Field report: {c.report}</p>}
 
-                    {(role === 'CRO' || role === 'SFSO') && (
+                    {(role === 'CRO' || isSupervisor) && (
                       <div className="bar" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                         {select('Change Stage', c.findings?.some(finding => finding.text.trim()) ? stages : stages.filter(stage => stage !== 'Closed' || c.stage === 'Closed'), c.stage, v => patch(c, { stage: v }, 'Stage changed to ' + v))}
                         <label>
@@ -2305,7 +2316,7 @@ function App() {
                       >
                         Open Case Conversation →
                       </button>
-                      {role === 'CRO' && c.stage !== 'Closed' && (
+                      {(role === 'CRO' || isSupervisor) && c.stage !== 'Closed' && (
                         <button
                           type="button"
                           onClick={() => {
@@ -2336,12 +2347,12 @@ function App() {
                         </button>
                       )}
                     </div>
-                    {c.stage !== 'Closed' && !c.findings?.length && (role === 'CRO' || role === 'SFSO') && (
+                    {c.stage !== 'Closed' && !c.findings?.length && (role === 'CRO' || isSupervisor) && (
                       <p className="sub" style={{ color: '#d97706', fontWeight: 500 }}>
                         ⚠️ Case findings are compulsory before closing this case. Click "+ Add Findings" to record findings and attach files.
                       </p>
                     )}
-                    {role === 'CRO' && findingsCaseId === c.id && c.stage !== 'Closed' && (
+                    {(role === 'CRO' || isSupervisor) && findingsCaseId === c.id && c.stage !== 'Closed' && (
                       <form
                         style={{
                           marginTop: 16,
@@ -2368,7 +2379,7 @@ function App() {
                                 ...(c.findings || []),
                                 {
                                   text,
-                                  author: `${name} (CRO)`,
+                                  author: `${name} (${role})`,
                                   at: new Date().toISOString(),
                                   files: attached,
                                 },
@@ -2485,7 +2496,7 @@ function App() {
               ) : (
                 <>
                   {/* Page: Today */}
-                  {page === 'Follow-Ups / Findings' && role === 'CRO' && (
+                  {page === 'Follow-Ups / Findings' && (role === 'CRO' || isSupervisor) && (
                     <FollowUps
                       cases={visible.filter(c => c.stage !== 'Closed')}
                       open={setDetail}
@@ -2659,6 +2670,21 @@ function App() {
                         <b>{sfsoCity} Region</b> field dispatch console. Managing <b>{sfsoCity}</b> cases and <b>{sfsoCity}</b> FSOs.
                       </p>
 
+                      <div className="box" style={{ marginTop: 12 }}>
+                        <h3>Findings &amp; field reports</h3>
+                        <p className="sub">Review city case findings, FSO reports and follow-ups, or open a case to add findings before closure.</p>
+                        <button type="button" onClick={() => go('Follow-Ups / Findings')}>Open Follow-Ups / Findings</button>
+                        {visible.filter(item => item.report || item.findings?.length || item.followUps?.length).map(item => (
+                          <div key={item.id} style={{ marginTop: 12 }}>
+                            <button className="link" onClick={() => { setDetail(item.id); log('Opened case findings', item.id); }}>{item.id}</button>
+                            <small> {item.stage} - {item.officer || 'Unassigned'} - {item.findings?.length || 0} findings, {item.followUps?.length || 0} follow-ups</small>
+                            {item.report && <p style={{ whiteSpace: 'pre-wrap' }}>Field report: {item.report}</p>}
+                            {!!item.findings?.length && <button type="button" onClick={() => setReportModalCase(item)}>View / Print Findings</button>}
+                          </div>
+                        ))}
+                        {!visible.some(item => item.report || item.findings?.length || item.followUps?.length) && <p className="sub">No findings or field updates recorded for this city yet.</p>}
+                      </div>
+
                       {/* Escalated Cases Table for Assignment in this City (Top Segment) */}
                       <h2 style={{ marginTop: 16, marginBottom: 8 }}>
                         {sfsoCity} Cases Awaiting Assignment ({visible.filter(c => c.stage === 'Escalated' && !c.isQueued).length})
@@ -2682,7 +2708,7 @@ function App() {
                               .filter(c => c.stage === 'Escalated' && !c.isQueued)
                               .map(c => {
                                 const selectedOfficer =
-                                  c.officer ||
+                                  (visibleFSOs.some(officer => officer.name === c.officer) ? c.officer : '') ||
                                   (currentFsoWorkloads.find(w => w.status === 'Free')?.name || visibleFSOs[0]?.name || '');
                                 const chosenWorkload = getFsoWorkload(selectedOfficer);
 
@@ -3078,7 +3104,7 @@ function App() {
                   {page === 'Case Board' && (
                     <>
                       <p className="sub">
-                        {role === 'SFSO'
+                        {isSupervisor
                           ? `Six stages board for ${sfsoCity} Region cases.`
                           : 'Six stages. One unified operational board of every case.'}
                       </p>
@@ -3809,7 +3835,7 @@ function App() {
                               </div>
 
                               <p className="badge-queued-notice" style={{ margin: '6px 0 10px' }}>
-                                ℹ️ Assigned by SFSO to execute immediately after your active case is resolved.
+                                ℹ️ Assigned by ${role} to execute immediately after your active case is resolved.
                               </p>
 
                               <button
@@ -3873,7 +3899,7 @@ function App() {
                       <p className="sub">
                         {role === 'Client'
                           ? `Consolidated reports for ${co} only.`
-                          : role === 'SFSO'
+                          : isSupervisor
                           ? `Operational reports for ${sfsoCity} Region cases.`
                           : 'Operational analytics. Filter by company, city, date, status, classification, or Case ID.'}
                       </p>
@@ -3896,7 +3922,7 @@ function App() {
                           />
                         </label>
                         {role !== 'Client' && filter('co', 'Company', companies)}
-                        {role !== 'SFSO' && filter('city', 'City', cities)}
+                        {!isSupervisor && filter('city', 'City', cities)}
                         {filter('stage', 'Status', stages)}
                         {filter('cls', 'Classification', ['Genuine', 'Negligence', 'Fraud'])}
                         <label>
@@ -4004,7 +4030,7 @@ function App() {
                   {page === 'Audit Logs' && (
                     <>
                       <p className="sub">
-                        Immutable session activity log. Entries record timestamped operations and dispatches.
+                        Session activity log: FSO, SFSO and SOM actions, messages and dispatches. Times include date and seconds in Pakistan time (PKT).
                       </p>
                       <div className="tw">
                         <table>
@@ -4014,10 +4040,11 @@ function App() {
                               <th>Activity Performed</th>
                               <th>Case ID</th>
                               <th>Timestamp</th>
+                              <th>Since previous case activity</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {logs.map((l, i) => (
+                            {visibleLogs.map((l, i) => (
                               <tr key={i}>
                                 <td>
                                   <b>{l.user}</b>
@@ -4025,11 +4052,17 @@ function App() {
                                 <td>{l.action}</td>
                                 <td>{l.id}</td>
                                 <td>{l.time}</td>
+                                <td>{(() => {
+                                  const previous = logs.find(entry => entry.id === l.id && entry.at < l.at);
+                                  if (!previous || !cases.some(c => c.id === l.id)) return 'First activity';
+                                  const seconds = Math.floor((l.at - previous.at) / 1000);
+                                  return `${Math.floor(seconds / 3600)}h ${Math.floor(seconds / 60) % 60}m ${seconds % 60}s`;
+                                })()}</td>
                               </tr>
                             ))}
-                            {!logs.length && (
+                            {!visibleLogs.length && (
                               <tr>
-                                <td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>
+                                <td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)' }}>
                                   No session actions recorded yet.
                                 </td>
                               </tr>

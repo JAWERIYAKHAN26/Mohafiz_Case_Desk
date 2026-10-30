@@ -171,12 +171,13 @@ const clientHubs: Record<string, string[]> = {
   ],
 };
 
-const supervisorPages = ['Escalations', 'Case Board', 'Client Updates', 'Internal Case Group', 'Field Team', 'Follow-Ups / Findings', 'Audit Logs'];
+const sfsoPages = ['Escalations', 'Case Board', 'Client Updates', 'Internal Case Group', 'Field Team', 'Follow-Ups / Findings', 'Audit Logs'];
+const somPages = ['Case Board', 'Client Updates', 'Internal Case Group', 'Field Team', 'Follow-Ups / Findings', 'Audit Logs'];
 
 const nav: Record<string, string[]> = {
   CRO: ['Today', 'New Cases', 'Case Board', 'Client Updates', 'Internal Case Group', 'Classification', 'Follow-Ups / Findings', 'Reports', 'Audit Logs'],
-  SFSO: supervisorPages,
-  SOM: supervisorPages,
+  SFSO: sfsoPages,
+  SOM: somPages,
   FSO: ['My Cases', 'Case Group'],
   Client: ['My Cases', 'Raise a Case', 'Client Updates', 'Reports'],
 };
@@ -585,7 +586,10 @@ function App() {
     isSupervisor ? sfsoCityMatches(o.city, sfsoCity) : true
   );
 
-  const visibleLogs = logs.filter(entry => !isSupervisor || sfsoCityMatches(entry.city, sfsoCity));
+  const visibleLogs = logs.filter(entry =>
+    (!isSupervisor || sfsoCityMatches(entry.city, sfsoCity)) &&
+    (role !== 'SOM' || ['SFSO', 'FSO', 'SOM'].includes(entry.role))
+  );
 
   const filtered = visible.filter(c =>
     Object.entries(f).every(
@@ -604,6 +608,14 @@ function App() {
 
   const patch = (c: C, v: Partial<C>, action: string) => {
     const current = cases.find(item => item.id === c.id) || c;
+    if (v.stage === 'Closed' && role !== 'CRO') {
+      setNotice('Only a CRO can close a case.');
+      return;
+    }
+    if (v.findings && role !== 'CRO') {
+      setNotice('Only a CRO can add case findings.');
+      return;
+    }
     if (v.stage === 'Closed' && !current.findings?.some(finding => finding.text.trim())) {
       setNotice('Add and save case findings before closing this case.');
       return;
@@ -1588,7 +1600,7 @@ function App() {
       )}
 
       {/* Official Incident Resolution & Case Findings Report Modal */}
-      {reportModalCase && (
+      {reportModalCase && !isSupervisor && (
         <div className="modal-overlay" onClick={() => setReportModalCase(null)}>
           <div className="report-modal-card" onClick={e => e.stopPropagation()}>
             <div className="report-doc-header">
@@ -2306,7 +2318,7 @@ function App() {
 
                     {(role === 'CRO' || isSupervisor) && (
                       <div className="bar" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                        {select('Change Stage', c.findings?.some(finding => finding.text.trim()) ? stages : stages.filter(stage => stage !== 'Closed' || c.stage === 'Closed'), c.stage, v => patch(c, { stage: v }, 'Stage changed to ' + v))}
+                        {select('Change Stage', role === 'CRO' ? stages : stages.filter(stage => stage !== 'Closed' || c.stage === 'Closed'), c.stage, v => patch(c, { stage: v }, 'Stage changed to ' + v))}
                         <label>
                           Recovered Amount (PKR)
                           <input
@@ -2333,7 +2345,7 @@ function App() {
                       >
                         Open Case Conversation →
                       </button>
-                      {(role === 'CRO' || isSupervisor) && c.stage !== 'Closed' && (
+                      {role === 'CRO' && c.stage !== 'Closed' && (
                         <button
                           type="button"
                           onClick={() => {
@@ -2346,7 +2358,7 @@ function App() {
                           + Add Findings
                         </button>
                       )}
-                      {(c.stage === 'Closed' || (c.findings && c.findings.length > 0)) && (
+                      {(!isSupervisor && (c.stage === 'Closed' || (c.findings && c.findings.length > 0))) && (
                         <button
                           type="button"
                           onClick={() => setReportModalCase(c)}
@@ -2364,12 +2376,12 @@ function App() {
                         </button>
                       )}
                     </div>
-                    {c.stage !== 'Closed' && !c.findings?.length && (role === 'CRO' || isSupervisor) && (
+                    {c.stage !== 'Closed' && !c.findings?.length && role === 'CRO' && (
                       <p className="sub" style={{ color: '#d97706', fontWeight: 500 }}>
                         ⚠️ Case findings are compulsory before closing this case. Click "+ Add Findings" to record findings and attach files.
                       </p>
                     )}
-                    {(role === 'CRO' || isSupervisor) && findingsCaseId === c.id && c.stage !== 'Closed' && (
+                    {role === 'CRO' && findingsCaseId === c.id && c.stage !== 'Closed' && (
                       <form
                         style={{
                           marginTop: 16,
@@ -2451,7 +2463,7 @@ function App() {
                         </div>
                       </form>
                     )}
-                    {!!c.findings?.length && (
+                    {!isSupervisor && !!c.findings?.length && (
                       <section style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                           <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2686,21 +2698,6 @@ function App() {
                       <p className="sub">
                         <b>{sfsoCity} Region</b> field dispatch console. Managing <b>{sfsoCity}</b> cases and <b>{sfsoCity}</b> FSOs.
                       </p>
-
-                      <div className="box" style={{ marginTop: 12 }}>
-                        <h3>Findings &amp; field reports</h3>
-                        <p className="sub">Review city case findings, FSO reports and follow-ups, or open a case to add findings before closure.</p>
-                        <button type="button" onClick={() => go('Follow-Ups / Findings')}>Open Follow-Ups / Findings</button>
-                        {visible.filter(item => item.report || item.findings?.length || item.followUps?.length).map(item => (
-                          <div key={item.id} style={{ marginTop: 12 }}>
-                            <button className="link" onClick={() => { setDetail(item.id); log('Opened case findings', item.id); }}>{item.id}</button>
-                            <small> {item.stage} - {item.officer || 'Unassigned'} - {item.findings?.length || 0} findings, {item.followUps?.length || 0} follow-ups</small>
-                            {item.report && <p style={{ whiteSpace: 'pre-wrap' }}>Field report: {item.report}</p>}
-                            {!!item.findings?.length && <button type="button" onClick={() => setReportModalCase(item)}>View / Print Findings</button>}
-                          </div>
-                        ))}
-                        {!visible.some(item => item.report || item.findings?.length || item.followUps?.length) && <p className="sub">No findings or field updates recorded for this city yet.</p>}
-                      </div>
 
                       {/* Escalated Cases Table for Assignment in this City (Top Segment) */}
                       <h2 style={{ marginTop: 16, marginBottom: 8 }}>

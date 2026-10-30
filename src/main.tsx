@@ -413,6 +413,8 @@ export type Msg = {
 function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState('CRO');
+  const [activeCroName, setActiveCroName] = useState('Shoaib');
+  const [loginEmail, setLoginEmail] = useState('shoaib@mohafiz.pk');
   const [sfsoCity, setSfsoCity] = useState<'Islamabad' | 'Lahore' | 'Karachi'>('Islamabad'); // 3 SFSOs
   const [co, setCo] = useState('PostEx');
   const [signed, setSigned] = useState(false);
@@ -502,7 +504,7 @@ function App() {
 
   const name =
     role === 'CRO'
-      ? 'Shoaib'
+      ? activeCroName
       : role === 'SFSO'
       ? `${activeSfso.name} (${sfsoCity})`
       : role === 'FSO'
@@ -1843,7 +1845,7 @@ function App() {
               >
                 <label>
                   Email
-                  <input type="email" autoComplete="username" placeholder="you@company.com" required defaultValue="officer@mohafiz.pk" />
+                  <input type="email" autoComplete="username" placeholder="you@company.com" required value={loginEmail} readOnly={role === 'CRO'} onChange={e => setLoginEmail(e.target.value)} />
                 </label>
                 <div className="password-field">
                   <label htmlFor="login-password">Password</label>
@@ -1873,6 +1875,11 @@ function App() {
                   'Demo: sign in as',
                   [
                     'CRO',
+                    'CRO Shoaib',
+                    'CRO Waleed',
+                    'CRO Tahmoor',
+                    'CRO Talib',
+                    'CRO Asad',
                     'SFSO Islamabad (Ahmed)',
                     'SFSO Lahore (Hamza)',
                     'SFSO Karachi (Tariq)',
@@ -1885,7 +1892,9 @@ function App() {
                     'FSO Peshawar (Naveed Afridi)',
                     ...companies.map(company => 'Client ' + company),
                   ],
-                  role === 'Client'
+                  role === 'CRO'
+                    ? `CRO ${activeCroName}`
+                    : role === 'Client'
                     ? 'Client ' + co
                     : role === 'SFSO'
                     ? `SFSO ${sfsoCity} (${sfsoDesks[sfsoCity].name})`
@@ -1907,6 +1916,11 @@ function App() {
                       if (match) {
                         setActiveFsoName(match.name);
                       }
+                    } else if (value.startsWith('CRO ')) {
+                      const croName = value.slice(4);
+                      setRole('CRO');
+                      setActiveCroName(croName);
+                      setLoginEmail(`${croName.toLowerCase()}@mohafiz.pk`);
                     } else {
                       setRole(value);
                     }
@@ -1964,6 +1978,8 @@ function App() {
                 ? co
                 : role === 'SFSO'
                 ? `SFSO ${sfsoCity} Desk`
+                : role === 'CRO'
+                ? `${name} CRO Desk`
                 : 'Operations workspace'}{' '}
               <b>{role}</b>
             </p>
@@ -2214,6 +2230,7 @@ function App() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
                         <div>
                           <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase' }}>
+
                             Exact Location (Client-Reported)
                           </div>
                           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginTop: 2 }}>

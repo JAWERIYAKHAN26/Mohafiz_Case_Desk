@@ -5,7 +5,7 @@ import {
   Tags, ChartNoAxesCombined, History, ArrowUpRight, Users, BriefcaseBusiness,
   PlusCircle, Sun, Moon, LogOut, UserRound, MapPin, Phone, Clock, Building2,
   CheckCircle2, AlertCircle, Navigation, Radio, Send, X, ExternalLink, Check, AlertTriangle,
-  Eye, EyeOff, FileText, Printer, Paperclip, Menu
+  Eye, EyeOff, FileText, Printer, Paperclip, Menu, Smile
 } from 'lucide-react';
 import './theme-desk.css';
 import FollowUps, { FollowUpForm, type FollowUpItem } from './FollowUps';
@@ -172,8 +172,8 @@ const clientHubs: Record<string, string[]> = {
   ],
 };
 
-const sfsoPages = ['Escalations', 'Case Board', 'Client Updates', 'Internal Case Group', 'Field Team', 'Follow-Ups / Findings', 'Audit Logs'];
-const somPages = ['Case Board', 'Client Updates', 'Internal Case Group', 'Field Team', 'Follow-Ups / Findings', 'Audit Logs'];
+const sfsoPages = ['Escalations', 'Case Board', 'Client Updates', 'Internal Case Group', 'Field Team', 'Audit Logs'];
+const somPages = ['Case Board', 'Client Updates', 'Internal Case Group', 'Field Team', 'Audit Logs'];
 
 const nav: Record<string, string[]> = {
   CRO: ['Dashboard', 'Internal Case Group', 'Client Updates', 'Case Board', 'Reports', 'Audit Logs'],
@@ -422,6 +422,7 @@ function App() {
   const [loginEmail, setLoginEmail] = useState('shoaib@mohafiz.pk');
   const [sfsoCity, setSfsoCity] = useState<'Islamabad' | 'Lahore' | 'Karachi'>('Islamabad'); // 3 SFSOs
   const isSupervisor = role === 'SFSO' || role === 'SOM';
+  const canManageFollowUps = role === 'CRO';
   const [co, setCo] = useState('PostEx');
   const [signed, setSigned] = useState(false);
   const [signedInEmail, setSignedInEmail] = useState('');
@@ -450,7 +451,7 @@ function App() {
     ] : [],
   })));
   const [activeFsoName, setActiveFsoName] = useState('Sara Ahmed'); // For FSO view switcher
-  const [fsoViewMode, setFsoViewMode] = useState<'assigned' | 'city'>('assigned');
+  const [fsoCaseFilter, setFsoCaseFilter] = useState<'all' | 'open' | 'closed' | 'inProgress' | 'pending'>('all');
   const [logs, setLogs] = useState<{ user: string; action: string; id: string; time: string; at: number; role: string; city: string }[]>([]);
   const [msgs, setMsgs] = useState<Record<string, Msg[]>>({
     'cPOS-RAW-OCT-26-1': [
@@ -511,6 +512,13 @@ function App() {
   // Active FSO Info & City
   const activeOfficer = officers.find(o => o.name === activeFsoName) || officers[0];
   const fsoCity = activeOfficer.city;
+  const fsoCaseMatchesFilter = (caseItem: C) => {
+    if (fsoCaseFilter === 'open') return caseItem.stage !== 'Closed';
+    if (fsoCaseFilter === 'closed') return caseItem.stage === 'Closed';
+    if (fsoCaseFilter === 'inProgress') return caseItem.stage === 'In progress' && !caseItem.isQueued;
+    if (fsoCaseFilter === 'pending') return caseItem.stage !== 'Closed' && (caseItem.isQueued || caseItem.stage !== 'In progress');
+    return true;
+  };
 
   const name =
     role === 'CRO'
@@ -520,11 +528,6 @@ function App() {
       : role === 'FSO'
       ? activeFsoName
       : co + ' user';
-
-  // Cases occurring in the active FSO's city
-  const fsoCityCases = cases.filter(c =>
-    sfsoCityMatches(c.city, fsoCity === 'Rawalpindi' ? 'Islamabad' : fsoCity)
-  );
 
   // FSO Acknowledges an assigned case
   const handleFsoAcknowledge = (caseItem: C) => {
@@ -584,6 +587,7 @@ function App() {
     if (isSupervisor) return sfsoCityMatches(c.city, sfsoCity);
     return true; // CRO sees all
   });
+  const fsoAssignedCases = role === 'FSO' ? visible.filter(fsoCaseMatchesFilter) : [];
 
   // FSOs visible to the user:
   // SFSO only sees FSOs in their city!
@@ -686,6 +690,7 @@ function App() {
     setMsgs(all => ({
       ...all,
       [clientKey]: [...(all[clientKey] || []), autoAckMsg],
+      ['i' + c.id]: [...(all['i' + c.id] || []), autoAckMsg],
     }));
 
     setSelected(c.id);
@@ -895,8 +900,10 @@ function App() {
     select(label, ['All', ...values], f[k] || 'All', v => setF({ ...f, [k]: v }));
 
   const current = visible.find(c => c.id === selected) || visible[0];
+  const allChatsSelected = selected === '__all_cases__';
   const clientChannelName = `Mohafiz X ${role === 'Client' ? co : (visible.find(item => item.id === detail) || current)?.co || co}`;
   const pageLabel = (value: string) => value === 'Client Updates' ? clientChannelName : value;
+  const mobileNavPages = nav[role].slice(0, 4);
 
   // Send message or live location in chat
   const send = (channel: string, file?: File, liveLocation = false) => {
@@ -942,17 +949,34 @@ function App() {
     log((channel === 'c' ? 'Client message sent: ' : 'Internal message sent: ') + (file ? 'Attachment: ' + file.name : text.trim()), current.id);
   };
 
-  const chat = (channel: string) => (
-    <>
+  const chat = (channel: string) => {
+    const messagesToShow = allChatsSelected
+      ? visible.flatMap(caseItem =>
+          (msgs[channel + caseItem.id] || []).map((message, index) => ({
+            caseId: caseItem.id,
+            message,
+            key: `${caseItem.id}-${index}`,
+          }))
+        )
+      : current
+      ? (msgs[channel + current.id] || []).map((message, index) => ({
+          caseId: current.id,
+          message,
+          key: `${current.id}-${index}`,
+        }))
+      : [];
+
+    return (
+      <>
       <p className="sub">
         {channel === 'c'
           ? 'Shared communication channel between Client, CRO, SFSO and SOM.'
           : 'Staff-only operational channel: CRO, SFSO, SOM, and assigned Field Security Officers (FSOs).'}
       </p>
       <div className="bar">
-        {select('Select Case', visible.map(c => c.id), current?.id || '', setSelected)}
-        {chip(channel === 'c' ? 'Shared with client' : 'Internal case group')}
-        {current && (
+        {select('Select Case', ['All', ...visible.map(c => c.id)], allChatsSelected ? 'All' : current?.id || '', value => setSelected(value === 'All' ? '__all_cases__' : value))}
+        {chip(allChatsSelected ? `All chat history (${visible.length} cases)` : channel === 'c' ? 'Shared with client' : 'Internal case group')}
+        {current && !allChatsSelected && (
           <button
             type="button"
             className="loc-pill"
@@ -965,16 +989,16 @@ function App() {
         )}
       </div>
 
-      {current ? (
+      {visible.length ? (
         <>
           <div className="messages">
-            {(msgs[channel + current.id] || []).map((m, i) => (
-              <div className={'message ' + (m.user === name ? 'me' : '')} key={i}>
+            {messagesToShow.map(({ message: m, caseId, key }) => (
+              <div className={'message ' + (m.user === name ? 'me' : '')} key={key}>
                 <small>
                   {m.role === 'CRO' && (role === 'Client' || channel === 'c')
                     ? 'Mohafiz Operations • Operations Desk'
                     : `${m.user} • ${m.role}`}{' '}
-                  • {m.time}
+                  • {m.time}{allChatsSelected ? ` • Case ${caseId}` : ''}
                 </small>
                 {m.type === 'location' && m.location ? (
                   <div className="chat-live-loc">
@@ -1016,80 +1040,87 @@ function App() {
                 )}
               </div>
             ))}
-            {!(msgs[channel + current.id] || []).length && (
-              <p className="sub">No messages yet. Start the conversation or share real-time updates.</p>
+            {!messagesToShow.length && (
+              <p className="sub">{allChatsSelected ? 'No messages in the visible case histories yet.' : 'No messages yet. Start the conversation or share real-time updates.'}</p>
             )}
           </div>
 
-          <form
-            className="bar"
+          {allChatsSelected ? (
+            <p className="sub">Viewing all visible case histories. Select a specific case to send a message or attachment.</p>
+          ) : <form
+            className="bar chat-composer"
             onSubmit={e => {
               e.preventDefault();
               send(channel);
             }}
           >
+            <label className="upload chat-attach" aria-label="Attach documents, images, videos, or other files" title="Attach documents, images, videos, or other files">
+              <Paperclip size={15} aria-hidden="true" />
+              <input
+                type="file"
+                multiple
+                style={{ display: 'none' }}
+                onChange={e => {
+                  Array.from(e.target.files || []).forEach(file => send(channel, file));
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              className="chat-composer-icon"
+              aria-label="Insert smile emoji"
+              title="Insert smile emoji"
+              onClick={() => setText(currentText => currentText + '🙂')}
+            >
+              <Smile size={19} aria-hidden="true" />
+            </button>
             <input
               aria-label="Message"
               placeholder="Type a message or operational dispatch update..."
+              list="case-chat-mentions"
               value={text}
-              onChange={e => setText(e.target.value)}
+              onChange={e => {
+                const nextText = e.target.value;
+                const mentionedCaseId = nextText.match(/^@(.+)$/)?.[1].trim();
+                const mentionedCase = mentionedCaseId
+                  ? visible.find(caseItem => caseItem.id.toLowerCase() === mentionedCaseId.toLowerCase())
+                  : undefined;
+                if (mentionedCase) {
+                  setSelected(mentionedCase.id);
+                  setText('');
+                  return;
+                }
+                setText(nextText);
+              }}
             />
-            <button className="primary" type="submit">
-              Send <Send size={13} style={{ display: 'inline', marginLeft: 4 }} />
-            </button>
-          </form>
-
-          <div className="bar" style={{ gap: 8, alignItems: 'center' }}>
-            {/* Live Location Share Button - ONLY for FSO (Field Security Officer) */}
+            <datalist id="case-chat-mentions">
+              {visible.map(caseItem => <option key={caseItem.id} value={`@${caseItem.id}`} />)}
+            </datalist>
             {role === 'FSO' && (
               <button
                 type="button"
-                className="primary"
-                style={{
-                  background: 'var(--button)',
-                  borderColor: 'var(--button)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  fontSize: 11,
-                }}
+                className="chat-composer-icon"
+                aria-label="Share live location"
+                title="Share live location to this case room"
                 onClick={() => send(channel, undefined, true)}
-                title="Broadcast real-time device location to this case room"
               >
-                <Radio size={14} className="radar-pulse" />
-                <span>📍 Share Live Location</span>
+                <MapPin size={19} aria-hidden="true" />
               </button>
             )}
+            <button className="primary chat-composer-send" type="submit" aria-label="Send message" title="Send message">
+              <Send size={17} aria-hidden="true" />
+            </button>
+          </form>}
 
-            {['Document', 'Image', 'Video', 'File'].map(a => (
-              <label className="upload" key={a}>
-                + {a}
-                <input
-                  type="file"
-                  accept={
-                    a === 'Image'
-                      ? 'image/*'
-                      : a === 'Video'
-                      ? 'video/*'
-                      : a === 'Document'
-                      ? '.pdf,.doc,.docx,.txt'
-                      : undefined
-                  }
-                  onChange={e => {
-                    if (e.target.files?.[0]) send(channel, e.target.files[0]);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            ))}
-          </div>
           <small>Demo GPS coordinates and attachments are simulated for the Mohafiz prototype.</small>
         </>
       ) : (
         <div className="empty">No assigned cases available.</div>
       )}
     </>
-  );
+    );
+  };
 
   const exportCsv = () => {
     const rows = [
@@ -1903,13 +1934,7 @@ function App() {
                     'SOM Islamabad',
                     'SOM Lahore',
                     'SOM Karachi',
-                    'FSO Islamabad (Sara Ahmed)',
-                    'FSO Rawalpindi (Usman Tariq)',
-                    'FSO Lahore (Zubair Shah)',
-                    'FSO Lahore (Bilal Hassan)',
-                    'FSO Karachi (Ali Raza)',
-                    'FSO Karachi (Farhan Qureshi)',
-                    'FSO Peshawar (Naveed Afridi)',
+                    ...officers.map(officer => `FSO ${officer.city} (${officer.name})`),
                     ...companies.map(company => 'Client ' + company),
                   ],
                   role === 'CRO'
@@ -1935,6 +1960,7 @@ function App() {
                       const match = officers.find(o => value.includes(o.name));
                       if (match) {
                         setActiveFsoName(match.name);
+                        setLoginEmail(`${match.name.toLowerCase().replaceAll(' ', '.')}@mohafiz.pk`);
                       }
                     } else if (value.startsWith('CRO ')) {
                       const croName = value.slice(4);
@@ -2052,21 +2078,6 @@ function App() {
                     <span className="hub-tag" style={{ background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0' }}>
                       📍 {fsoCity}
                     </span>
-                    <small style={{ color: 'var(--muted)', fontWeight: 600 }}>Switch Officer:</small>
-                    <select
-                      value={activeFsoName}
-                      onChange={e => {
-                        setActiveFsoName(e.target.value);
-                        setNotice('Switched active FSO to ' + e.target.value);
-                      }}
-                      style={{ height: 28, fontSize: 11, padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}
-                    >
-                      {officers.map(o => (
-                        <option key={o.name} value={o.name}>
-                          {o.name} — {o.city} ({o.phone})
-                        </option>
-                      ))}
-                    </select>
                   </span>
                 )}
               </span>
@@ -2494,8 +2505,8 @@ function App() {
                     )}
                   </div>
                   <section className="service-activity box" aria-label="Case notes and activity">
-                    <div className="service-activity-actions"><button onClick={() => { setSelected(c.id); go(role === 'FSO' ? 'Case Group' : 'Client Updates'); }}>Send message</button>{(role === 'CRO' || isSupervisor) && <button type="button" aria-expanded={inlineFollowUpCase === c.id} aria-controls="inline-follow-up" onClick={() => setInlineFollowUpCase(current => current === c.id ? '' : c.id)}>Log notes</button>}</div>
-                    {(role === 'CRO' || isSupervisor) && inlineFollowUpCase === c.id && (
+                    <div className="service-activity-actions"><button onClick={() => { setSelected(c.id); go(role === 'FSO' ? 'Case Group' : 'Client Updates'); }}>Send message</button>{role === 'CRO' && <button type="button" aria-expanded={inlineFollowUpCase === c.id} aria-controls="inline-follow-up" onClick={() => setInlineFollowUpCase(current => current === c.id ? '' : c.id)}>Log notes</button>}</div>
+                    {role === 'CRO' && inlineFollowUpCase === c.id && (
                       <section id="inline-follow-up" className="inline-follow-up log-note-composer" aria-label="Log an internal note">
                         <span className="note-avatar" aria-hidden="true"><UserRound size={18} /></span>
                         <FollowUpForm key={c.id} item={c} showClassification noteMode onClassificationChange={classification => {
@@ -2528,10 +2539,11 @@ function App() {
               ) : (
                 <>
                   {/* Dashboard and follow-ups */}
-                  {page === 'Follow-Ups / Findings' && (role === 'CRO' || isSupervisor) && (
+                  {page === 'Follow-Ups / Findings' && canManageFollowUps && (
                     <FollowUps
                       cases={visible.filter(c => c.stage !== 'Closed')}
                       open={setDetail}
+                      canLogNotes
                       save={(item, followUp) => {
                         patch(
                           item,
@@ -3516,7 +3528,7 @@ function App() {
 
                   {/* Page: My Cases (FSO Mobile Style Workspace) */}
                   {page === 'My Cases' && role === 'FSO' && (
-                    <div className="phone">
+                    <div className="fso-workspace">
                       {/* Officer Profile & City Header */}
                       <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
@@ -3536,123 +3548,39 @@ function App() {
                           </span>
                         </div>
 
-                        {/* Quick Officer & City Switcher */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--soft)', padding: '6px 10px', borderRadius: 6, fontSize: 11, marginTop: 10 }}>
-                          <span style={{ fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap' }}>Switch Officer & City:</span>
-                          <select
-                            value={activeFsoName}
-                            onChange={e => {
-                              setActiveFsoName(e.target.value);
-                              setNotice(`Switched active Field Officer to ${e.target.value} (${officers.find(o => o.name === e.target.value)?.city})`);
-                            }}
-                            style={{ flex: 1, height: 26, fontSize: 11, padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}
-                          >
-                            {officers.map(o => (
-                              <option key={o.name} value={o.name}>
-                                {o.name} — {o.city} ({o.phone})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* View Tabs: My Assigned Cases vs All City Incidents */}
-                        <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                          <button
-                            type="button"
-                            style={{
-                              flex: 1,
-                              fontSize: 11,
-                              padding: '6px 10px',
-                              background: fsoViewMode === 'assigned' ? 'var(--accent)' : 'var(--soft)',
-                              color: fsoViewMode === 'assigned' ? '#fff' : 'var(--text)',
-                              fontWeight: 700,
-                              borderRadius: 4,
-                              border: fsoViewMode === 'assigned' ? '1px solid var(--accent)' : '1px solid var(--border)',
-                            }}
-                            onClick={() => setFsoViewMode('assigned')}
-                          >
-                            My Assigned Cases ({visible.length})
-                          </button>
-                          <button
-                            type="button"
-                            style={{
-                              flex: 1,
-                              fontSize: 11,
-                              padding: '6px 10px',
-                              background: fsoViewMode === 'city' ? 'var(--accent)' : 'var(--soft)',
-                              color: fsoViewMode === 'city' ? '#fff' : 'var(--text)',
-                              fontWeight: 700,
-                              borderRadius: 4,
-                              border: fsoViewMode === 'city' ? '1px solid var(--accent)' : '1px solid var(--border)',
-                            }}
-                            onClick={() => setFsoViewMode('city')}
-                          >
-                            All {fsoCity} Cases ({fsoCityCases.length})
-                          </button>
+                        <div className="fso-case-filters" role="group" aria-label="Filter assigned cases">
+                          {([
+                            ['all', 'All', visible.length],
+                            ['open', 'Open', visible.filter(c => c.stage !== 'Closed').length],
+                            ['closed', 'Closed', visible.filter(c => c.stage === 'Closed').length],
+                            ['inProgress', 'In progress', visible.filter(c => c.stage === 'In progress' && !c.isQueued).length],
+                            ['pending', 'Pending', visible.filter(c => c.stage !== 'Closed' && (c.isQueued || c.stage !== 'In progress')).length],
+                          ] as const).map(([filterKey, label, count]) => (
+                            <button
+                              key={filterKey}
+                              type="button"
+                              className="fso-case-filter"
+                              aria-pressed={fsoCaseFilter === filterKey}
+                              onClick={() => setFsoCaseFilter(filterKey)}
+                            >
+                              {label} ({count})
+                            </button>
+                          ))}
                         </div>
                       </div>
 
-                      {/* City Wide Feed Tab */}
-                      {fsoViewMode === 'city' && (
-                        <div style={{ marginBottom: 18 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
-                            <span>📍 All Incidents in {fsoCity} Region ({fsoCityCases.length})</span>
-                            <span style={{ fontSize: 10, color: 'var(--accent)' }}>City Operational Picture</span>
-                          </div>
-
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                            {fsoCityCases.map(c => (
-                              <div
-                                key={c.id}
-                                className="box"
-                                style={{
-                                  margin: 0,
-                                  borderLeft: c.officer === name ? '4px solid var(--accent)' : '1px solid var(--border)',
-                                  background: c.officer === name ? 'var(--soft)' : 'var(--card)',
-                                }}
-                              >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <b>{c.id}</b>
-                                    <span className="hub-tag" style={{ fontSize: 9 }}>{c.hub || c.co}</span>
-                                  </div>
-                                  {chip(c.stage)}
-                                </div>
-                                <div style={{ fontSize: 12, fontWeight: 600, margin: '4px 0 2px' }}>
-                                  {c.issue} • PKR {c.amount.toLocaleString()}
-                                </div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                                  📍 {c.exactLocation || c.city}
-                                </div>
-                                <div style={{ fontSize: 11, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <span>👤 Rider: <b>{c.riderName || 'N/A'}</b> ({c.riderPhone || 'No phone'})</span>
-                                  <span style={{ fontSize: 10, fontWeight: 600, color: c.officer === name ? 'var(--accent)' : 'var(--muted)' }}>
-                                    {c.officer ? (c.officer === name ? '★ Assigned to YOU' : `Officer: ${c.officer}`) : 'Unassigned (In Queue)'}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                            {fsoCityCases.length === 0 && (
-                              <div className="empty" style={{ padding: 15, fontSize: 12 }}>
-                                No reported incidents in {fsoCity} currently.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
                       {/* Section 1 & 2: Assigned Cases */}
-                      {fsoViewMode === 'assigned' && (
-                        <>
+                      <>
+                        {(fsoCaseFilter === 'all' || fsoCaseFilter === 'open' || fsoCaseFilter === 'inProgress') && <>
                           <div style={{ marginBottom: 18 }}>
                           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', marginBottom: 8 }}>
-                            ⚡ Current Active Cases ({visible.filter(c => c.stage === 'In progress' && !c.isQueued).length})
+                            ⚡ Current Active Cases ({fsoAssignedCases.filter(c => c.stage === 'In progress' && !c.isQueued).length})
                           </div>
 
-                        {visible
+                        {fsoAssignedCases
                           .filter(c => c.stage === 'In progress' && !c.isQueued)
                           .map(c => (
-                            <div className="box" key={c.id} style={{ borderColor: 'var(--accent)' }}>
+                            <div className="box fso-case-card fso-active-case" key={c.id}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <h3>{c.id}</h3>
                                 {chip(c.priority)}
@@ -3697,15 +3625,16 @@ function App() {
                                 </button>
                                 <button
                                   type="button"
-                                  className="loc-pill"
-                                  style={{ flex: 1, justifyContent: 'center' }}
+                                  className="loc-pill fso-chat-action"
                                   onClick={() => {
                                     setSelected(c.id);
                                     go('Case Group');
                                   }}
+                                  aria-label={`Open Case Group for ${c.id}`}
+                                  title={`Open Case Group for ${c.id}`}
                                 >
-                                  <Radio size={12} />
-                                  <span>Live Chat</span>
+                                  <MessagesSquare size={15} />
+                                  <span>Chat</span>
                                 </button>
                               </div>
 
@@ -3784,14 +3713,7 @@ function App() {
                                       patch(
                                         c,
                                         {
-                                          report:
-                                            String(d.get('report')) +
-                                            ' | Evidence: ' +
-                                            d
-                                              .getAll('evidence')
-                                              .filter(v => v instanceof File && (v as File).name)
-                                              .map(v => (v as File).name)
-                                              .join(', '),
+                                          report: String(d.get('report')),
                                         },
                                         'Field report submitted'
                                       );
@@ -3807,10 +3729,6 @@ function App() {
                                         placeholder="Record detailed field findings (at least 20 chars)..."
                                       />
                                     </label>
-                                    <label>
-                                      Evidence Photos / Voice Note
-                                      <input name="evidence" type="file" multiple accept="image/*,audio/*" />
-                                    </label>
                                     <button className="full primary" disabled={!c.arrived}>
                                       Send Field Report
                                     </button>
@@ -3820,20 +3738,21 @@ function App() {
                             </div>
                           ))}
 
-                        {!visible.some(c => c.stage === 'In progress' && !c.isQueued) && (
+                        {!fsoAssignedCases.some(c => c.stage === 'In progress' && !c.isQueued) && (
                           <div className="empty" style={{ padding: 15, fontSize: 12 }}>
                             No active cases in progress right now. You are free for immediate dispatch!
                           </div>
                         )}
                       </div>
+                        </>}
 
                       {/* Section 2: Queued / Upcoming Cases (To do after current case) */}
-                      <div>
+                      {(fsoCaseFilter === 'all' || fsoCaseFilter === 'open' || fsoCaseFilter === 'pending') && <div>
                         <div style={{ fontSize: 11, fontWeight: 700, color: '#bd9851', textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span>📋 Upcoming Queued Cases ({visible.filter(c => c.isQueued && c.stage !== 'Closed').length})</span>
+                          <span>📋 Upcoming Queued Cases ({fsoAssignedCases.filter(c => c.isQueued && c.stage !== 'Closed').length})</span>
                         </div>
 
-                        {visible
+                        {fsoAssignedCases
                           .filter(c => c.isQueued && c.stage !== 'Closed')
                           .map((c, idx) => (
                             <div
@@ -3903,14 +3822,40 @@ function App() {
                             </div>
                           ))}
 
-                        {!visible.some(c => c.isQueued && c.stage !== 'Closed') && (
+                        {!fsoAssignedCases.some(c => c.isQueued && c.stage !== 'Closed') && (
                           <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', padding: 10 }}>
                             No queued cases pending.
                           </div>
                         )}
-                      </div>
+                      </div>}
+                      {(fsoCaseFilter === 'all' || fsoCaseFilter === 'open' || fsoCaseFilter === 'pending') && <section style={{ marginBottom: 18 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>
+                          Pending Cases ({fsoAssignedCases.filter(c => c.stage !== 'Closed' && c.stage !== 'In progress' && !c.isQueued).length})
+                        </div>
+                        {fsoAssignedCases.filter(c => c.stage !== 'Closed' && c.stage !== 'In progress' && !c.isQueued).map(c => (
+                          <div className="box" key={c.id} style={{ marginBottom: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><b>{c.id}</b>{chip(c.stage)}</div>
+                            <p style={{ margin: '6px 0', fontSize: 12 }}><b>{c.co}</b> • {c.hub} • {c.issue}</p>
+                            <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>📍 {c.exactLocation || c.city} • Rider: {c.riderName || 'N/A'}</p>
+                            <button type="button" className="loc-pill" style={{ marginTop: 8 }} onClick={() => { setSelected(c.id); go('Case Group'); }}>Open Case Group</button>
+                          </div>
+                        ))}
+                        {!fsoAssignedCases.some(c => c.stage !== 'Closed' && c.stage !== 'In progress' && !c.isQueued) && <p className="sub">No pending cases.</p>}
+                      </section>}
+                      {(fsoCaseFilter === 'all' || fsoCaseFilter === 'closed') && <section style={{ marginBottom: 18 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>
+                          Closed Cases ({fsoAssignedCases.filter(c => c.stage === 'Closed').length})
+                        </div>
+                        {fsoAssignedCases.filter(c => c.stage === 'Closed').map(c => (
+                          <div className="box" key={c.id} style={{ marginBottom: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><b>{c.id}</b>{chip(c.stage)}</div>
+                            <p style={{ margin: '6px 0', fontSize: 12 }}><b>{c.co}</b> • {c.hub} • {c.issue}</p>
+                            <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>📍 {c.exactLocation || c.city} • Rider: {c.riderName || 'N/A'}</p>
+                          </div>
+                        ))}
+                        {!fsoAssignedCases.some(c => c.stage === 'Closed') && <p className="sub">No closed cases.</p>}
+                      </section>}
                     </>
-                  )}
                   </div>
                 )}
 
@@ -4104,7 +4049,7 @@ function App() {
 
           {/* Mobile Bottom Quick-Access Thumb Bar (Visible on mobile screens only) */}
           <nav className="mobile-bottom-bar" aria-label="Mobile Navigation Bar">
-            {nav[role].slice(0, 4).map(p => {
+            {mobileNavPages.map(p => {
               const Icon = pageIcons[p];
               return (
                 <button

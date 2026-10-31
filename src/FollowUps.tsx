@@ -97,13 +97,16 @@ export default function FollowUps({
   cases,
   save,
   open,
+  canLogNotes = false,
 }: {
   cases: C[];
   save: (item: C, followUp: FollowUpItem) => void;
   open: (id: string) => void;
+  canLogNotes?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
+  const [loggingCaseId, setLoggingCaseId] = useState('');
   const rows = cases.filter(
     item => item.stage !== 'Closed' && item.id.toLowerCase().includes(search.trim().toLowerCase())
   );
@@ -152,6 +155,18 @@ export default function FollowUps({
                   <button type="button" onClick={() => open(item.id)}>
                     Open detail
                   </button>
+                  {canLogNotes && <button type="button" onClick={() => setLoggingCaseId(current => current === item.id ? '' : item.id)}>
+                    {loggingCaseId === item.id ? 'Cancel note' : 'Log note'}
+                  </button>}
+                  {canLogNotes && loggingCaseId === item.id && <FollowUpForm
+                    key={`note-${item.id}`}
+                    item={item}
+                    noteMode
+                    save={(noteCase, note) => {
+                      save(noteCase, note);
+                      setLoggingCaseId('');
+                    }}
+                  />}
                 </td>
                 <td data-label="Details">
                   <b>{item.riderName}</b>

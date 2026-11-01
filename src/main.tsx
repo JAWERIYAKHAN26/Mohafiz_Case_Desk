@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ShieldCheck, LayoutDashboard, Inbox, Columns3, MessagesSquare, MessageSquareLock,
   Tags, ChartNoAxesCombined, History, ArrowUpRight, Users, BriefcaseBusiness,
-  PlusCircle, Sun, Moon, LogOut, UserRound, MapPin, Phone, Clock, Building2,
+  PlusCircle, Sun, Moon, LogOut, UserRound, MapPin, Phone, Clock, Building2, Search,
   CheckCircle2, AlertCircle, Navigation, Radio, Send, X, ExternalLink, Check, AlertTriangle,
   Eye, EyeOff, FileText, Printer, Paperclip, Menu, Smile
 } from 'lucide-react';
@@ -28,6 +28,12 @@ const pageIcons: Record<string, typeof ShieldCheck> = {
   'Follow-Ups / Findings': History,
   'Internal Case Group': MessageSquareLock,
   'Case Group': MessageSquareLock,
+  'Mohafiz X Islamabad': MessageSquareLock,
+  'Mohafiz X Karachi': MessageSquareLock,
+  'Mohafiz X Lahore': MessageSquareLock,
+  'Mohafiz X PostEx': MessagesSquare,
+  'Mohafiz X Daraz': MessagesSquare,
+  'Mohafiz X Buscaro': MessagesSquare,
   'Classification': Tags,
   'Reports': ChartNoAxesCombined,
   'Audit Logs': History,
@@ -45,6 +51,12 @@ const categories: Record<string, string> = {
   'Follow-Ups / Findings': 'INVESTIGATION',
   'Internal Case Group': 'COMMUNICATION',
   'Case Group': 'COMMUNICATION',
+  'Mohafiz X Islamabad': 'CITY OPERATIONS CHAT',
+  'Mohafiz X Karachi': 'CITY OPERATIONS CHAT',
+  'Mohafiz X Lahore': 'CITY OPERATIONS CHAT',
+  'Mohafiz X PostEx': 'CLIENT CHAT',
+  'Mohafiz X Daraz': 'CLIENT CHAT',
+  'Mohafiz X Buscaro': 'CLIENT CHAT',
   'Classification': 'INVESTIGATION',
   'Reports': 'ANALYTICS',
   'Audit Logs': 'ACTIVITY',
@@ -140,6 +152,13 @@ export const officerNames = officers.map(o => o.name);
 const stages = ['New', 'Acknowledged', 'Escalated', 'In progress', 'Hold', 'Closed'];
 const companies = ['PostEx', 'Daraz', 'Buscaro'];
 const cities = ['Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Peshawar'];
+const cityGroups = ['Islamabad', 'Karachi', 'Lahore'] as const;
+const companyGroupPage = (company: string) => `Mohafiz X ${company}`;
+const cityGroupPage = (city: string) => `Mohafiz X ${city === 'Karachi' || city === 'Lahore' ? city : 'Islamabad'}`;
+const clientGroupKey = (company: string) => `cg:${company}`;
+const internalGroupKey = (city: string) => `ig:${city === 'Karachi' || city === 'Lahore' ? city : 'Islamabad'}`;
+const internalConversationKey = (caseItem: Pick<C, 'id' | 'city'>) =>
+  `i${cityGroupPage(caseItem.city).slice('Mohafiz X '.length)}${caseItem.id}`;
 
 // Helper to check city match for SFSO (Islamabad covers Islamabad & Rawalpindi twin cities)
 export const sfsoCityMatches = (caseCity: string, sfsoCity: string) => {
@@ -172,15 +191,12 @@ const clientHubs: Record<string, string[]> = {
   ],
 };
 
-const sfsoPages = ['Escalations', 'Case Board', 'Client Updates', 'Internal Case Group', 'Field Team', 'Audit Logs'];
-const somPages = ['Case Board', 'Client Updates', 'Internal Case Group', 'Field Team', 'Audit Logs'];
-
 const nav: Record<string, string[]> = {
-  CRO: ['Dashboard', 'Internal Case Group', 'Client Updates', 'Case Board', 'Reports', 'Audit Logs'],
-  SFSO: sfsoPages,
-  SOM: somPages,
-  FSO: ['My Cases', 'Case Group'],
-  Client: ['My Cases', 'Raise a Case', 'Client Updates', 'Reports'],
+  CRO: ['Dashboard', 'Case Board', 'Reports', 'Audit Logs'],
+  SFSO: ['Escalations', 'Case Board', 'Field Team', 'Audit Logs'],
+  SOM: ['Case Board', 'Field Team', 'Audit Logs'],
+  FSO: ['My Cases'],
+  Client: ['My Cases', 'Raise a Case', 'Reports'],
 };
 
 // Initial state with cases across Islamabad, Lahore, and Karachi
@@ -406,6 +422,8 @@ export type Msg = {
   role: string;
   text: string;
   time: string;
+  caseId?: string;
+  sentAt?: number;
   type?: 'text' | 'file' | 'location';
   location?: {
     lat: number;
@@ -453,12 +471,14 @@ function App() {
   const [activeFsoName, setActiveFsoName] = useState('Sara Ahmed'); // For FSO view switcher
   const [fsoCaseFilter, setFsoCaseFilter] = useState<'all' | 'open' | 'closed' | 'inProgress' | 'pending'>('all');
   const [logs, setLogs] = useState<{ user: string; action: string; id: string; time: string; at: number; role: string; city: string }[]>([]);
+  const [chatReadCursors, setChatReadCursors] = useState<Record<string, number>>({});
+  const [chatSeenReceipts, setChatSeenReceipts] = useState<Record<string, { messageId: string; viewers: string[] }>>({});
   const [msgs, setMsgs] = useState<Record<string, Msg[]>>({
     'cPOS-RAW-OCT-26-1': [
       { user: 'PostEx user', role: 'Client', text: 'Rider reported payment not credited from commercial market hub.', time: '09:27', type: 'text' },
       { user: 'Mohafiz Operations', role: 'CRO', text: 'Case logged. Reviewing with accounts desk.', time: '09:31', type: 'text' },
     ],
-    'iPOS-LAH-OCT-26-1': [
+    'iLahorePOS-LAH-OCT-26-1': [
       { user: 'Zubair Shah', role: 'FSO', text: 'Reached Mall Road scene. Interviewing eyewitnesses.', time: '10:12', type: 'text' },
       {
         user: 'Zubair Shah',
@@ -478,6 +498,9 @@ function App() {
   });
   const [selected, setSelected] = useState(initial[0].id);
   const [text, setText] = useState('');
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [activeSearchMessage, setActiveSearchMessage] = useState('');
   const [notice, setNotice] = useState('');
   const [detail, setDetail] = useState('');
   const [boardCity, setBoardCity] = useState('');
@@ -548,12 +571,13 @@ function App() {
       role: 'FSO',
       text: `✅ Field Officer ${name} has acknowledged Case #${caseItem.id} and confirmed on-ground response in ${caseItem.city}. Priority: ${caseItem.priority}. Location: ${caseItem.exactLocation || caseItem.city}.`,
       time: time(),
+      sentAt: Date.now(),
       type: 'text',
     };
 
     setMsgs(all => ({
       ...all,
-      ['i' + caseItem.id]: [...(all['i' + caseItem.id] || []), internalMsg],
+      [internalConversationKey(caseItem)]: [...(all[internalConversationKey(caseItem)] || []), internalMsg],
     }));
 
     setNotice(`Case #${caseItem.id} acknowledged by ${name}. Confirmation message sent to internal group.`);
@@ -587,6 +611,82 @@ function App() {
     if (isSupervisor) return sfsoCityMatches(c.city, sfsoCity);
     return true; // CRO sees all
   });
+  const cityChatPages = role === 'CRO'
+    ? cityGroups.map(city => cityGroupPage(city))
+    : isSupervisor
+    ? [cityGroupPage(sfsoCity)]
+    : role === 'FSO'
+    ? [cityGroupPage(fsoCity)]
+    : [];
+  const companyChatPages = role === 'Client'
+    ? [companyGroupPage(co)]
+    : role === 'FSO'
+    ? []
+    : companies.map(companyGroupPage);
+  const navPages = [...nav[role], ...cityChatPages, ...companyChatPages];
+  const chatPages = [...cityGroups.map(cityGroupPage), ...companies.map(companyGroupPage)];
+  const chatCasesForPage = (chatPage: string) => {
+    const company = companies.find(item => companyGroupPage(item) === chatPage);
+    if (company) return visible.filter(caseItem => caseItem.co === company);
+    const city = cityGroups.find(item => cityGroupPage(item) === chatPage);
+    return city ? visible.filter(caseItem => cityGroupPage(caseItem.city) === chatPage) : [];
+  };
+  const getGroupMessages = (chatPage: string) => {
+    const company = companies.find(item => companyGroupPage(item) === chatPage);
+    const city = cityGroups.find(item => cityGroupPage(item) === chatPage);
+    if (!company && !city) return [];
+    const channel = company ? 'c' : 'i';
+    const groupKey = company ? clientGroupKey(company) : internalGroupKey(city!);
+    return [
+      ...chatCasesForPage(chatPage).flatMap(caseItem => {
+        const key = channel === 'c' ? 'c' + caseItem.id : internalConversationKey(caseItem);
+        return (msgs[key] || []).map((message, index) => ({
+          ...message,
+          caseId: message.caseId || caseItem.id,
+          sentAt: message.sentAt || 0,
+          sourceKey: `${key}-${index}`,
+        }));
+      }),
+      ...(msgs[groupKey] || []).map((message, index) => ({
+        ...message,
+        sentAt: message.sentAt || 0,
+        sourceKey: `${groupKey}-${index}`,
+      })),
+    ].sort((first, second) => first.sentAt - second.sentAt);
+  };
+  const getUnreadCount = (channel: string, caseId: string) => {
+    const caseItem = cases.find(item => item.id === caseId);
+    const key = channel === 'c' ? 'c' + caseId : caseItem ? internalConversationKey(caseItem) : 'i' + caseId;
+    const thread = msgs[key] || [];
+    const cursor = chatReadCursors[`${name}:${channel}:${caseId}`] || 0;
+    return thread.slice(cursor).filter(message =>
+      message.user !== name && !(role === 'CRO' && message.role === 'CRO')
+    ).length;
+  };
+  const getUnreadGroupCount = (groupPage: string) => {
+    const company = companies.find(item => companyGroupPage(item) === groupPage);
+    const city = cityGroups.find(item => cityGroupPage(item) === groupPage);
+    if (!company && !city) return 0;
+    const channel = company ? 'c' : 'i';
+    const key = company ? clientGroupKey(company) : internalGroupKey(city!);
+    const groupUnread = (msgs[key] || []).slice(chatReadCursors[`${name}:${key}`] || 0).filter(message =>
+      message.user !== name && !(role === 'CRO' && message.role === 'CRO')
+    ).length;
+    const caseUnread = chatCasesForPage(groupPage).reduce((count, caseItem) => count + getUnreadCount(channel, caseItem.id), 0);
+    return groupUnread + caseUnread;
+  };
+  const internalUnreadCount =
+    visible.reduce((count, caseItem) => count + getUnreadCount('i', caseItem.id), 0) +
+    cityChatPages.reduce((count, groupPage) => count + getUnreadGroupCount(groupPage), 0);
+  const openUnreadInternalChat = () => {
+    const firstUnreadCase = visible.find(caseItem => getUnreadCount('i', caseItem.id) > 0);
+    const unreadGroup = cityChatPages.find(groupPage => getUnreadGroupCount(groupPage) > 0);
+    const targetGroup = firstUnreadCase
+      ? cityGroupPage(firstUnreadCase.city)
+      : unreadGroup || cityGroupPage(isSupervisor ? sfsoCity : role === 'FSO' ? fsoCity : 'Islamabad');
+    if (firstUnreadCase) setSelected(firstUnreadCase.id);
+    go(targetGroup);
+  };
   const fsoAssignedCases = role === 'FSO' ? visible.filter(fsoCaseMatchesFilter) : [];
 
   // FSOs visible to the user:
@@ -630,12 +730,12 @@ function App() {
       return;
     }
     if (v.report) {
-      const key = 'i' + c.id;
+      const key = internalConversationKey(c);
       setMsgs(all => ({
         ...all,
         [key]: [
           ...(all[key] || []),
-          { user: name, role, text: 'Field report: ' + v.report, time: time(), type: 'text' },
+          { user: name, role, text: 'Field report: ' + v.report, time: time(), caseId: c.id, sentAt: Date.now(), type: 'text' },
         ],
       }));
     }
@@ -684,13 +784,14 @@ function App() {
       role: 'CRO',
       text: `📢 Case #${c.id} has been acknowledged by Mohafiz Operations Desk and officially forwarded to ${targetSfsoDesk} for on-ground team assignment. Hub: ${c.hub || c.co}. Exact Location: ${c.exactLocation}.`,
       time: time(),
+      sentAt: Date.now(),
       type: 'text',
     };
 
     setMsgs(all => ({
       ...all,
       [clientKey]: [...(all[clientKey] || []), autoAckMsg],
-      ['i' + c.id]: [...(all['i' + c.id] || []), autoAckMsg],
+      [internalConversationKey(c)]: [...(all[internalConversationKey(c)] || []), autoAckMsg],
     }));
 
     setSelected(c.id);
@@ -778,12 +879,13 @@ function App() {
       role: 'FSO',
       text: `⚠️ Field Officer ${name} reported unable to proceed with Case #${caseItem.id}: "${reason.trim()}". Case escalated back to SFSO and SOM for reassignment to another officer.`,
       time: time(),
+      sentAt: Date.now(),
       type: 'text',
     };
 
     setMsgs(all => ({
       ...all,
-      ['i' + caseItem.id]: [...(all['i' + caseItem.id] || []), internalMsg],
+      [internalConversationKey(caseItem)]: [...(all[internalConversationKey(caseItem)] || []), internalMsg],
     }));
 
     setBusyModalCase(null);
@@ -799,7 +901,7 @@ function App() {
       return;
     }
     const workload = getFsoWorkload(chosenOfficer);
-    const internalKey = 'i' + caseItem.id;
+    const internalKey = internalConversationKey(caseItem);
     const wasReassigned = Boolean(caseItem.busyReason);
     const reassignedNote = wasReassigned
       ? ` (Reassigned from ${caseItem.busyByOfficer || 'previous officer'} who reported unable to proceed)`
@@ -828,6 +930,7 @@ function App() {
         role,
         text: `🚨 Case #${caseItem.id} assigned to Field Officer ${chosenOfficer} by ${role} ${name} (Queued Task #${newQueueOrder})${reassignedNote}. Priority: ${caseItem.priority}. Location: ${caseItem.exactLocation || caseItem.city}.`,
         time: time(),
+        sentAt: Date.now(),
         type: 'text',
       };
 
@@ -863,6 +966,7 @@ function App() {
         role,
         text: `🚨 Case #${caseItem.id} assigned to Field Officer ${chosenOfficer} by ${role} ${name} (Immediate Dispatch)${reassignedNote}. Location: ${caseItem.exactLocation || caseItem.city}.`,
         time: time(),
+        sentAt: Date.now(),
         type: 'text',
       };
 
@@ -900,32 +1004,41 @@ function App() {
     select(label, ['All', ...values], f[k] || 'All', v => setF({ ...f, [k]: v }));
 
   const current = visible.find(c => c.id === selected) || visible[0];
-  const allChatsSelected = selected === '__all_cases__';
-  const clientChannelName = `Mohafiz X ${role === 'Client' ? co : (visible.find(item => item.id === detail) || current)?.co || co}`;
-  const pageLabel = (value: string) => value === 'Client Updates' ? clientChannelName : value;
-  const mobileNavPages = nav[role].slice(0, 4);
+  const pageLabel = (value: string) => value;
+  const mobileNavPages = navPages.slice(0, 4);
 
   // Send message or live location in chat
-  const send = (channel: string, file?: File, liveLocation = false) => {
-    if (!current) return;
-    const key = channel + current.id;
+  const send = (channel: string, file?: File, liveLocation = false, targetCase?: C) => {
+    const company = companies.find(item => companyGroupPage(item) === page);
+    const city = cityGroups.find(item => cityGroupPage(item) === page);
+    const key = targetCase
+      ? channel === 'c' ? 'c' + targetCase.id : internalConversationKey(targetCase)
+      : company
+      ? clientGroupKey(company)
+      : city
+      ? internalGroupKey(city)
+      : '';
+    if (!key) return;
 
     if (liveLocation) {
+      const locationCity = targetCase?.city || city || fsoCity;
       const locMsg: Msg = {
         user: name,
         role,
-        text: '📍 Shared Live GPS Location',
+        text: `📍 Shared Live GPS Location${targetCase ? ` for Case #${targetCase.id}` : ''}`,
         time: time(),
+        caseId: targetCase?.id,
+        sentAt: Date.now(),
         type: 'location',
         location: {
-          lat: current.city === 'Rawalpindi' ? 33.6007 : current.city === 'Karachi' ? 24.8607 : 31.5204,
-          lng: current.city === 'Rawalpindi' ? 73.0679 : current.city === 'Karachi' ? 67.0011 : 74.3587,
-          address: current.exactLocation || `${current.city} incident zone`,
+          lat: locationCity === 'Rawalpindi' ? 33.6007 : locationCity === 'Karachi' ? 24.8607 : 31.5204,
+          lng: locationCity === 'Rawalpindi' ? 73.0679 : locationCity === 'Karachi' ? 67.0011 : 74.3587,
+          address: targetCase?.exactLocation || `${locationCity} incident zone`,
           accuracy: '±3m (High-Accuracy Real-Time GPS)',
         },
       };
       setMsgs(v => ({ ...v, [key]: [...(v[key] || []), locMsg] }));
-      log('Shared live location', current.id);
+      log('Shared live location', targetCase?.id || '—');
       setNotice('Live location shared to chat.');
       return;
     }
@@ -941,64 +1054,139 @@ function App() {
           role,
           text: file ? 'Attachment: ' + file.name : text.trim(),
           time: time(),
+          caseId: targetCase?.id,
+          sentAt: Date.now(),
           type: file ? 'file' : 'text',
         },
       ],
     }));
     setText('');
-    log((channel === 'c' ? 'Client message sent: ' : 'Internal message sent: ') + (file ? 'Attachment: ' + file.name : text.trim()), current.id);
+    log((channel === 'c' ? 'Client message sent: ' : 'Internal message sent: ') + (file ? 'Attachment: ' + file.name : text.trim()), targetCase?.id || '—');
   };
 
+  useEffect(() => {
+    const channel = companies.some(company => companyGroupPage(company) === page) ? 'c' : cityGroups.some(city => cityGroupPage(city) === page) ? 'i' : '';
+    if (!signed || !channel) return;
+    const groupCases = chatCasesForPage(page);
+    const groupKey = channel === 'c'
+      ? clientGroupKey(companies.find(company => companyGroupPage(company) === page)!)
+      : internalGroupKey(cityGroups.find(city => cityGroupPage(city) === page)!);
+    setChatReadCursors(previous => {
+      const next = { ...previous };
+      let changed = false;
+      for (const caseItem of groupCases) {
+        const cursorKey = `${name}:${channel}:${caseItem.id}`;
+        const messageKey = channel === 'c' ? 'c' + caseItem.id : internalConversationKey(caseItem);
+        const threadLength = (msgs[messageKey] || []).length;
+        if (next[cursorKey] !== threadLength) {
+          next[cursorKey] = threadLength;
+          changed = true;
+        }
+      }
+      const groupCursorKey = `${name}:${groupKey}`;
+      const groupLength = (msgs[groupKey] || []).length;
+      if (next[groupCursorKey] !== groupLength) {
+        next[groupCursorKey] = groupLength;
+        changed = true;
+      }
+      return changed ? next : previous;
+    });
+    const latestMessage = getGroupMessages(page).at(-1);
+    if (latestMessage) {
+      const viewer = role === 'SFSO'
+        ? `${activeSfso.name} (SFSO)`
+        : role === 'SOM'
+        ? `SOM ${sfsoCity} (SOM)`
+        : role === 'FSO'
+        ? `${activeFsoName} (FSO)`
+        : role === 'CRO'
+        ? `${activeCroName} (CRO)`
+        : `${co} client`;
+      const receiptKey = `${name}:${groupKey}`;
+      setChatSeenReceipts(previous => {
+        const existing = previous[receiptKey];
+        const viewers = existing?.messageId === latestMessage.sourceKey
+          ? existing.viewers
+          : [];
+        if (viewers.includes(viewer)) return previous;
+        return { ...previous, [receiptKey]: { messageId: latestMessage.sourceKey, viewers: [...viewers, viewer] } };
+      });
+    }
+  }, [page, name, msgs, signed]);
+
+  useEffect(() => {
+    if (!activeSearchMessage) return;
+    document.getElementById(`chat-message-${encodeURIComponent(activeSearchMessage)}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timeout = window.setTimeout(() => setActiveSearchMessage(''), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [activeSearchMessage]);
+
   const chat = (channel: string) => {
-    const messagesToShow = allChatsSelected
-      ? visible.flatMap(caseItem =>
-          (msgs[channel + caseItem.id] || []).map((message, index) => ({
-            caseId: caseItem.id,
-            message,
-            key: `${caseItem.id}-${index}`,
-          }))
-        )
-      : current
-      ? (msgs[channel + current.id] || []).map((message, index) => ({
-          caseId: current.id,
-          message,
-          key: `${current.id}-${index}`,
-        }))
+    const casesInGroup = chatCasesForPage(page);
+    const company = companies.find(item => companyGroupPage(item) === page);
+    const city = cityGroups.find(item => cityGroupPage(item) === page);
+    const groupKey = company ? clientGroupKey(company) : city ? internalGroupKey(city) : '';
+    const messagesToShow = getGroupMessages(page);
+    const latestMessage = messagesToShow.at(-1);
+    const latestReceipt = chatSeenReceipts[`${name}:${groupKey}`];
+    const latestViewers = latestMessage && latestReceipt?.messageId === latestMessage.sourceKey
+      ? latestReceipt.viewers
+      : [];
+    const searchTerm = chatSearchQuery.trim().toLowerCase();
+    const searchResults = searchTerm
+      ? messagesToShow.filter(message => [
+          message.text,
+          message.user,
+          message.caseId,
+          message.location?.address,
+        ].some(value => value?.toLowerCase().includes(searchTerm)))
       : [];
 
     return (
       <>
-      <p className="sub">
-        {channel === 'c'
-          ? 'Shared communication channel between Client, CRO, SFSO and SOM.'
-          : 'Staff-only operational channel: CRO, SFSO, SOM, and assigned Field Security Officers (FSOs).'}
-      </p>
-      <div className="bar">
-        {select('Select Case', ['All', ...visible.map(c => c.id)], allChatsSelected ? 'All' : current?.id || '', value => setSelected(value === 'All' ? '__all_cases__' : value))}
-        {chip(allChatsSelected ? `All chat history (${visible.length} cases)` : channel === 'c' ? 'Shared with client' : 'Internal case group')}
-        {current && !allChatsSelected && (
-          <button
-            type="button"
-            className="loc-pill"
-            style={{ marginLeft: 'auto' }}
-            onClick={() => setViewLocCase(current)}
-          >
-            <MapPin size={13} />
-            <span>Exact: {current.exactLocation || current.city}</span>
-          </button>
-        )}
-      </div>
-
-      {visible.length ? (
-        <>
+      {casesInGroup.length || (msgs[groupKey] || []).length ? (
+        <section className="single-chat" aria-label={`${page} conversation`}>
+          <header className="chat-thread-header">
+            <div><b>{page}</b><small>All {casesInGroup.length} case conversations</small></div>
+            <button
+              type="button"
+              className={'chat-search-toggle ' + (chatSearchOpen ? 'active' : '')}
+              aria-label={chatSearchOpen ? 'Close chat search' : 'Search this chat'}
+              title={chatSearchOpen ? 'Close chat search' : 'Search this chat'}
+              aria-pressed={chatSearchOpen}
+              onClick={() => {
+                setChatSearchOpen(open => !open);
+                setChatSearchQuery('');
+                setActiveSearchMessage('');
+              }}
+            >
+              {chatSearchOpen ? <X size={17} /> : <Search size={17} />}
+            </button>
+          </header>
+          {chatSearchOpen && <div className="chat-search-bar">
+            <Search size={17} aria-hidden="true" />
+            <input
+              type="search"
+              aria-label="Search messages in this chat"
+              placeholder="Search messages in this chat..."
+              value={chatSearchQuery}
+              onChange={event => setChatSearchQuery(event.target.value)}
+            />
+            {chatSearchQuery && <button type="button" className="chat-search-clear" aria-label="Clear search" onClick={() => setChatSearchQuery('')}><X size={15} /></button>}
+          </div>}
+          <div className={'chat-body ' + (chatSearchOpen && searchTerm ? 'with-search' : '')}>
           <div className="messages">
-            {messagesToShow.map(({ message: m, caseId, key }) => (
-              <div className={'message ' + (m.user === name ? 'me' : '')} key={key}>
+            {messagesToShow.map((m, i) => (
+              <div
+                id={`chat-message-${encodeURIComponent(m.sourceKey)}`}
+                className={'message ' + (m.user === name ? 'me' : '') + (activeSearchMessage === m.sourceKey ? ' search-hit' : '')}
+                key={m.sourceKey || `${m.user}-${i}`}
+              >
                 <small>
                   {m.role === 'CRO' && (role === 'Client' || channel === 'c')
                     ? 'Mohafiz Operations • Operations Desk'
                     : `${m.user} • ${m.role}`}{' '}
-                  • {m.time}{allChatsSelected ? ` • Case ${caseId}` : ''}
+                  • {m.time}{m.caseId ? ` • Case ${m.caseId}` : ' • Group message'}
                 </small>
                 {m.type === 'location' && m.location ? (
                   <div className="chat-live-loc">
@@ -1038,16 +1226,26 @@ function App() {
                 ) : (
                   <p>{m.text}</p>
                 )}
+                {i === messagesToShow.length - 1 && latestViewers.length > 0 && (
+                  <small className="message-seen-receipt">Seen by {latestViewers.join(', ')}</small>
+                )}
               </div>
             ))}
-            {!messagesToShow.length && (
-              <p className="sub">{allChatsSelected ? 'No messages in the visible case histories yet.' : 'No messages yet. Start the conversation or share real-time updates.'}</p>
-            )}
+            {!messagesToShow.length && <p className="sub">No messages yet in this group. Start the conversation or share real-time updates.</p>}
+          </div>
+          {chatSearchOpen && chatSearchQuery.trim() && <aside className="chat-search-results" aria-label="Search results">
+            <div className="chat-search-results-heading">{searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}</div>
+            {searchResults.map(message => (
+              <button type="button" key={message.sourceKey} className="chat-search-result" onClick={() => setActiveSearchMessage(message.sourceKey)}>
+                <small>{message.time}{message.caseId ? ` · Case ${message.caseId}` : ' · Group message'}</small>
+                <span><b>{message.user}</b> {message.text || message.location?.address || 'Location shared'}</span>
+              </button>
+            ))}
+            {!searchResults.length && <p className="sub">No matching messages in this group.</p>}
+          </aside>}
           </div>
 
-          {allChatsSelected ? (
-            <p className="sub">Viewing all visible case histories. Select a specific case to send a message or attachment.</p>
-          ) : <form
+          <form
             className="bar chat-composer"
             onSubmit={e => {
               e.preventDefault();
@@ -1077,32 +1275,16 @@ function App() {
             </button>
             <input
               aria-label="Message"
-              placeholder="Type a message or operational dispatch update..."
-              list="case-chat-mentions"
+              placeholder={`Message all cases in ${page}...`}
               value={text}
-              onChange={e => {
-                const nextText = e.target.value;
-                const mentionedCaseId = nextText.match(/^@(.+)$/)?.[1].trim();
-                const mentionedCase = mentionedCaseId
-                  ? visible.find(caseItem => caseItem.id.toLowerCase() === mentionedCaseId.toLowerCase())
-                  : undefined;
-                if (mentionedCase) {
-                  setSelected(mentionedCase.id);
-                  setText('');
-                  return;
-                }
-                setText(nextText);
-              }}
+              onChange={e => setText(e.target.value)}
             />
-            <datalist id="case-chat-mentions">
-              {visible.map(caseItem => <option key={caseItem.id} value={`@${caseItem.id}`} />)}
-            </datalist>
             {role === 'FSO' && (
               <button
                 type="button"
                 className="chat-composer-icon"
                 aria-label="Share live location"
-                title="Share live location to this case room"
+                title="Share live location to this city group"
                 onClick={() => send(channel, undefined, true)}
               >
                 <MapPin size={19} aria-hidden="true" />
@@ -1111,12 +1293,12 @@ function App() {
             <button className="primary chat-composer-send" type="submit" aria-label="Send message" title="Send message">
               <Send size={17} aria-hidden="true" />
             </button>
-          </form>}
+          </form>
 
-          <small>Demo GPS coordinates and attachments are simulated for the Mohafiz prototype.</small>
-        </>
+          <small>Messages are visible in this group. Case-linked updates include their Case ID.</small>
+        </section>
       ) : (
-        <div className="empty">No assigned cases available.</div>
+        <div className="empty">No cases are available in this group.</div>
       )}
     </>
     );
@@ -2017,8 +2199,9 @@ function App() {
             </div>
             <p className="workspace">Mohafiz</p>
             <nav>
-              {nav[role].map(p => {
+              {navPages.map(p => {
                 const Icon = pageIcons[p];
+                const unreadCount = getUnreadGroupCount(p);
                 return (
                   <button
                     key={p}
@@ -2029,7 +2212,8 @@ function App() {
                     <span className="nav-icon">
                       <Icon size={15} aria-hidden="true" />
                     </span>
-                    {pageLabel(p)}
+                    <span className="nav-label">{pageLabel(p)}</span>
+                    {unreadCount > 0 && <span className="nav-unread-badge">{unreadCount > 4 ? '4+' : unreadCount}</span>}
                   </button>
                 );
               })}
@@ -2325,7 +2509,7 @@ function App() {
                         className="primary"
                         onClick={() => {
                           setSelected(c.id);
-                          go(role === 'FSO' ? 'Case Group' : 'Client Updates');
+                          go(role === 'FSO' ? cityGroupPage(c.city) : companyGroupPage(c.co));
                         }}
                       >
                         Open Case Conversation →
@@ -2505,7 +2689,7 @@ function App() {
                     )}
                   </div>
                   <section className="service-activity box" aria-label="Case notes and activity">
-                    <div className="service-activity-actions"><button onClick={() => { setSelected(c.id); go(role === 'FSO' ? 'Case Group' : 'Client Updates'); }}>Send message</button>{role === 'CRO' && <button type="button" aria-expanded={inlineFollowUpCase === c.id} aria-controls="inline-follow-up" onClick={() => setInlineFollowUpCase(current => current === c.id ? '' : c.id)}>Log notes</button>}</div>
+                    <div className="service-activity-actions"><button onClick={() => { setSelected(c.id); go(role === 'FSO' ? cityGroupPage(c.city) : companyGroupPage(c.co)); }}>Send message</button>{role === 'CRO' && <button type="button" aria-expanded={inlineFollowUpCase === c.id} aria-controls="inline-follow-up" onClick={() => setInlineFollowUpCase(current => current === c.id ? '' : c.id)}>Log notes</button>}</div>
                     {role === 'CRO' && inlineFollowUpCase === c.id && (
                       <section id="inline-follow-up" className="inline-follow-up log-note-composer" aria-label="Log an internal note">
                         <span className="note-avatar" aria-hidden="true"><UserRound size={18} /></span>
@@ -2562,15 +2746,10 @@ function App() {
                           <b>{cases.filter(c => c.stage === 'New').length}</b>
                           <small>View new cases →</small>
                         </button>
-                        <button className="stat" onClick={() => go('Client Updates')}>
+                        <button className="stat" onClick={openUnreadInternalChat}>
                           <span>Updates to review</span>
-                          <b>
-                            {Object.values(msgs).reduce(
-                              (n, m) => n + m.filter(x => x.user !== name).length,
-                              0
-                            )}
-                          </b>
-                          <small>Open messaging →</small>
+                          <b>{internalUnreadCount}</b>
+                          <small>Unread internal messages →</small>
                         </button>
                         <button className="stat" onClick={() => go('Case Board')}>
                           <span>In progress</span>
@@ -3196,8 +3375,8 @@ function App() {
                   )}
 
                   {/* Page: Client Updates / Internal Case Group / Case Group */}
-                  {['Client Updates', 'Internal Case Group', 'Case Group'].includes(page) &&
-                    chat(page === 'Client Updates' ? 'c' : 'i')}
+                  {chatPages.includes(page) &&
+                    chat(companies.some(company => companyGroupPage(company) === page) ? 'c' : 'i')}
 
                   {/* Page: Classification (CRO) */}
                   {page === 'Classification' && role === 'CRO' && (
@@ -3628,7 +3807,7 @@ function App() {
                                   className="loc-pill fso-chat-action"
                                   onClick={() => {
                                     setSelected(c.id);
-                                    go('Case Group');
+                                    go(cityGroupPage(c.city));
                                   }}
                                   aria-label={`Open Case Group for ${c.id}`}
                                   title={`Open Case Group for ${c.id}`}
@@ -3837,7 +4016,7 @@ function App() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><b>{c.id}</b>{chip(c.stage)}</div>
                             <p style={{ margin: '6px 0', fontSize: 12 }}><b>{c.co}</b> • {c.hub} • {c.issue}</p>
                             <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>📍 {c.exactLocation || c.city} • Rider: {c.riderName || 'N/A'}</p>
-                            <button type="button" className="loc-pill" style={{ marginTop: 8 }} onClick={() => { setSelected(c.id); go('Case Group'); }}>Open Case Group</button>
+                            <button type="button" className="loc-pill" style={{ marginTop: 8 }} onClick={() => { setSelected(c.id); go(cityGroupPage(c.city)); }}>Open City Chat</button>
                           </div>
                         ))}
                         {!fsoAssignedCases.some(c => c.stage !== 'Closed' && c.stage !== 'In progress' && !c.isQueued) && <p className="sub">No pending cases.</p>}
@@ -4051,6 +4230,7 @@ function App() {
           <nav className="mobile-bottom-bar" aria-label="Mobile Navigation Bar">
             {mobileNavPages.map(p => {
               const Icon = pageIcons[p];
+              const unreadCount = getUnreadGroupCount(p);
               return (
                 <button
                   key={p}
@@ -4061,6 +4241,7 @@ function App() {
                 >
                   <Icon size={18} />
                   <span>{pageLabel(p).split(' ')[0]}</span>
+                  {unreadCount > 0 && <span className="mobile-unread-badge">{unreadCount > 4 ? '4+' : unreadCount}</span>}
                 </button>
               );
             })}

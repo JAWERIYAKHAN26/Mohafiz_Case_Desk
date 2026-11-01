@@ -32,13 +32,13 @@ The CRO starts here. It provides:
 | Dashboard item | Meaning | Opens |
 | --- | --- | --- |
 | To acknowledge | Cases with New status | New Cases |
-| Updates to review | Messages by other users across conversations | Client Updates |
+| Updates to review | Unread internal messages in cases visible to the CRO | First unread city chat |
 | On hold | Cases with Hold status | Case Board |
 | Open cases | Every case except Closed | Case Board |
 | Your next action | Prompt to acknowledge incoming cases | New Cases |
 | Recent activity | Latest six session audit entries | Display only |
 
-Updates to review is a message count, not an unread-message tracker. Opening a conversation does not clear it.
+Updates to review counts unread internal city-chat messages for cases visible to the CRO. Opening a city chat marks the selected case thread read; the KPI opens the first unread case.
 
 ### New Cases
 
@@ -56,17 +56,17 @@ The board groups every company case into New, Acknowledged, Escalated, In progre
 
 Case details show company, city, issue, description, stage, amount, recovered amount, officer, classification, saved initial remarks and field report when available.
 
-CRO can change Stage and Recovered (PKR). Recovery must be between zero and the case amount. Stage and recovery edits save immediately. Open conversation goes to Client Updates for the selected case.
+CRO can change Stage and Recovered (PKR). Recovery must be between zero and the case amount. Stage and recovery edits save immediately. Open conversation goes to the case's company chat.
 
 An Acknowledged case can be sent onward by changing its Stage to Escalated in case details. There is no separate send button on the board and no drag-and-drop stage movement.
 
-### Client Updates
+### Client Company Chats
 
-Select a case to exchange messages with the client and SFSO. Text and Document, Image, Video or File attachments are available. Only attachment names are stored.
+PostEx, Daraz, and Buscaro each have a separate Mohafiz X company chat. Each company chat displays messages from all of that company's visible cases in one timeline, labeled by Case ID. Send text or attachments directly to the group; no case lookup is required. Use the search button to find words or phrases in the full group history; search results jump to matching messages without hiding the timeline. Only attachment names are stored.
 
-### Internal Case Group
+### City Chats
 
-Select a case for staff discussion with SFSO and the assigned FSO. This conversation is separate from Client Updates and absent from client navigation. Field reports are posted here automatically when submitted.
+Staff conversations are separated into Mohafiz X Islamabad, Mohafiz X Karachi, and Mohafiz X Lahore. Each city chat displays messages from all visible cases in that city in one timeline, labeled by Case ID, and accepts group-level replies. Use the search button to find words or phrases in the full group history; selecting a result jumps to its message. Islamabad includes Rawalpindi cases. CRO can access all three city chats; SFSO/SOM are restricted to their selected city, and FSOs to their own city's assigned cases. Clients cannot access city chats. Field reports, acceptance, assignment, and busy updates are posted to the case's city chat.
 
 ### Classification / Classify Incidents
 
@@ -113,9 +113,9 @@ Changing the officer selection saves the officer immediately; Confirm assignment
 
 Shows all companies and the same six stages as CRO. SFSO can open case details, change the stage, update recovery, place a case on Hold, resume it by setting In progress, or close it. These edits save immediately.
 
-### Client Updates and Internal Case Group
+### Company and City Chats
 
-Client Updates supports external case communication with the client and CRO. Internal Case Group supports staff discussion and field-report review. Both use a case selector and separate message histories.
+Company chats support client communication with CRO and supervisors. City chats support staff discussion and field-report review. Each group shows all permitted case messages together, tagged with their Case IDs, and provides one composer for group replies. The CRO Updates to review KPI counts unread internal city-chat messages and opens the city group with unread activity. Clients see only their company's chat and cannot access city groups.
 
 ### Field Team
 
@@ -145,13 +145,13 @@ Photos or voice notes can be selected as evidence; only filenames are retained. 
 
 Closed cases remain visible when assigned to the FSO, but their acceptance, arrival and report controls are hidden. Open case group remains available.
 
-### Case Group
+### City Chat
 
-An internal conversation for the FSO's assigned cases. Select a case, send text or attach a filename. The FSO cannot access Client Updates, other officers' cases, reports, classification or the staff Case Board through navigation.
+The FSO's city group shows messages from all of that FSO's assigned cases together, labeled by Case ID, and provides a group composer. The FSO cannot access client-company chats, other officers' cases, reports, classification or the staff Case Board through navigation.
 
 ### FSO process outline
 
-Login -> My Cases -> Accept case -> Confirm arrival -> Enter findings and optional evidence -> Send report -> Discuss in Case Group -> Staff reviews findings.
+Login -> My Cases -> Accept case -> Confirm arrival -> Enter findings -> Send report -> Discuss in city chat -> Staff reviews findings.
 
 Implementation note: visibility currently checks the assigned officer, not SFSO confirmation. A case proposed to Ali Raza can appear before the supervisor confirms it. Accept case itself sets In progress. The demo therefore does not strictly enforce SFSO confirmation before FSO acceptance.
 
@@ -177,7 +177,7 @@ Company comes from login; clients have no separate company or source-channel sel
 
 ### Client Updates
 
-Select one of the company's cases and exchange text or attachment filenames with CRO and SFSO. Other companies and internal staff conversations are unavailable in this navigation.
+Use the company's Mohafiz X chat to see messages from all company cases together, labeled by Case ID, and send a group reply or attachment. Other companies and city chats are unavailable to clients.
 
 ### Reports
 
@@ -232,23 +232,23 @@ For flowcharts, represent the following as enforced checks: valid intake fields,
 - Sign-out/sign-in role switching in the same page is the supported way to demonstrate handoffs. This is not a production authentication or server authorization system.
 - No real GPS, notifications, password reset, file upload/download storage or backend is connected.
 - Demo case dates and newly created case dates are fixed to 28 October 2026; date filters operate on those stored dates.
-- Officer identity and displayed officer cities are fixed demo values. Only Ali Raza has an FSO login option.
+- Officer identities and displayed cities are fixed demo values. Each listed FSO has a separate demo login and sees only cases assigned to that officer.
 - Classification does not automatically close a case; reports and dashboards recalculate from current session records.
-- There is no separate administrator dashboard, approval workflow, unread-message tracking, TAT calculation or automatic SLA escalation.
+- There is no separate administrator dashboard, approval workflow, persistent unread state, TAT calculation or automatic SLA escalation. In-memory unread cursors reset on refresh.
 
 
 ## SOM city desks and shared supervision
 
 Sign in using SOM Karachi, SOM Lahore or SOM Islamabad. SOM has the same
-Escalations, Case Board, client conversation, Internal Case Group and Field Team
-screens and actions as SFSO. Both roles also have Audit Logs in the sidebar.
+Case Board, company chats, city chat and Field Team screens and actions as SFSO.
+Both roles also have Audit Logs in the sidebar.
 Each desk sees its city's cases, officers and activity; Islamabad includes
 Rawalpindi, matching the existing SFSO desk coverage.
 
 FSO **Submit & Send to SFSO and SOM** records the unable-to-proceed reason,
-returns the case to Escalated and posts the submission to the shared internal
-case group. Both city supervisors see the same case awaiting reassignment.
-SOM can read and send messages in both Mohafiz X Client and Internal Case Group.
+returns the case to Escalated and posts the submission to the case's city chat.
+The matching city supervisors see the case awaiting reassignment. SOM can read
+company chats for cases in the selected city and its city chat.
 
 Audit entries identify the actor and role, action, case, and full timestamp
 including seconds in Pakistan time (PKT). Sent text and attachment names are
@@ -270,24 +270,21 @@ SFSO and SOM share one navigation configuration and the same escalation actions,
 including immediate dispatch, queued assignments and reassignment. Assignments
 must use an officer in the active desk's city coverage.
 
-Both supervisors have Follow-Ups / Findings in the sidebar. Open a case to
-add official findings and attachments, save them, and generate/print its report.
-Saved findings enable case closure under the existing closure rule.
-The Escalations screen also provides a city-scoped findings and field-report
-review section, including links to details and printable findings. Cases remain
-available there for review after they leave the assignment queue.
+Follow-Ups / Findings and case Log notes are CRO-only. SFSO and SOM review field
+activity through case details and their city chat. Assignment, acceptance,
+busy, and report messages are posted to the matching city chat.
 
 
 ### CRO simplified navigation
 
-The CRO sidebar now contains Dashboard, Internal Case Group, Mohafiz X Client
-(labelled with the selected case company), Case Board, Reports and Audit Logs.
+The CRO sidebar contains Dashboard, three city chats, three company chats,
+Case Board, Reports and Audit Logs.
 Dashboard replaces Today and retains the same overview, counts and recent activity.
 The compact Open New Cases button in the pending-review banner opens the existing
 New Cases screen with its filters, intake and acknowledgement actions. New Cases
 is a Dashboard subpage, with Dashboard highlighted and a Back to Dashboard button.
 Classification and Follow-Ups / Findings are no longer separate CRO sidebar tabs.
-Other roles retain their existing navigation.
+Other roles receive only the city and company chat groups permitted for their role.
 
 New-stage case details do not offer Add Findings, the findings form, or the prompt
 to add findings. In progress, Hold and Closed case behavior remains unchanged.

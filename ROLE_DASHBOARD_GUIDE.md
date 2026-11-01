@@ -163,7 +163,7 @@ The three client companies use the same screens, filtered to their selected comp
 
 The landing dashboard shows counts for Open, Closed and Waiting for acknowledgement, followed by the company's case table. Open includes all cases except Closed; Waiting for acknowledgement counts New cases.
 
-The table shows Case ID, company, issue, city, priority, stage and a plain-language handling message. Open a Case ID to inspect details. Clients can read case information, including saved classification, remarks and any field report shown in details, but cannot edit stage or recovery. Open conversation opens Client Updates.
+The table shows Case ID, company, issue, city, priority, stage and a plain-language handling message. Open a Case ID to inspect details. Clients can read case information, including saved classification, remarks and any field report shown in details, but cannot edit stage or recovery. Generate / Print Case Report is available for open and closed cases.
 
 ### Raise a Case
 
@@ -181,7 +181,7 @@ Use the company's Mohafiz X chat to see messages from all company cases together
 
 ### Reports
 
-Filter the company's records by city, date range, stage, classification or Case ID. View filtered totals and export matching rows as CSV. Clients cannot change the report company.
+Filter the company's records by city, date range, stage, classification or Case ID. View filtered totals and export matching rows as CSV. Open-case reports show CRO progress notes and hide final findings. After closure, the report shows final findings only. CRO reports retain both notes and findings. Closing a case posts a case-ID closure notice to that company's chat. Clients cannot change the report company.
 
 ### Client process outline
 

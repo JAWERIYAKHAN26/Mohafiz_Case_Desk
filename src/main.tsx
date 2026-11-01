@@ -739,6 +739,24 @@ function App() {
         ],
       }));
     }
+    if (v.stage === 'Closed' && current.stage !== 'Closed') {
+      const closureMessage: Msg = {
+        user: 'Mohafiz Operations',
+        role: 'CRO',
+        text: `Case #${c.id} has been closed from our side.`,
+        time: time(),
+        caseId: c.id,
+        sentAt: Date.now(),
+        type: 'text',
+      };
+      const clientKey = clientGroupKey(c.co);
+      const internalKey = internalConversationKey(c);
+      setMsgs(all => ({
+        ...all,
+        [clientKey]: [...(all[clientKey] || []), closureMessage],
+        [internalKey]: [...(all[internalKey] || []), closureMessage],
+      }));
+    }
     setCases(all => all.map(x => (x.id === c.id ? { ...x, ...v } : x)));
     log(action, c.id);
     setNotice(action + '.');
@@ -1911,16 +1929,16 @@ function App() {
               </p>
             </div>
 
-            {/* Follow-Up History (Visible to CRO / Operations Desk, excluded for Client) */}
-            {role !== 'Client' && (
+            {/* Client reports show active follow-ups until the case is closed; CRO always sees both records. */}
+            {(role !== 'Client' || reportModalCase.stage !== 'Closed') && (
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Clock size={16} color="#246f68" />
-                    <span>Follow-Up & Contact History (Internal Desk Records)</span>
+                    <span>{role === 'Client' ? 'Case Progress Updates' : 'Follow-Up & Contact History'}</span>
                   </h3>
                   <small style={{ color: 'var(--muted)' }}>
-                    Internal operations log • Excluded from client report
+                    {role === 'Client' ? 'Updates recorded by the CRO' : 'Internal operations log'}
                   </small>
                 </div>
 
@@ -1969,8 +1987,8 @@ function App() {
               </div>
             )}
 
-            {/* Official Case Findings Section (Saved by CRO before closing) */}
-            <div style={{ marginBottom: 20 }}>
+            {/* Clients only see final findings after closure; CRO retains full report access. */}
+            {(role !== 'Client' || reportModalCase.stage === 'Closed') && <div style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <FileText size={16} color="#246f68" />
@@ -1981,8 +1999,14 @@ function App() {
                 </small>
               </div>
 
-              {reportModalCase.findings && reportModalCase.findings.length > 0 ? (
-                reportModalCase.findings.map((f, i) => (
+              {(role === 'Client'
+                ? (reportModalCase.findings || []).filter(finding => finding.kind !== 'classification')
+                : reportModalCase.findings || []
+              ).length > 0 ? (
+                (role === 'Client'
+                  ? (reportModalCase.findings || []).filter(finding => finding.kind !== 'classification')
+                  : reportModalCase.findings || []
+                ).map((f, i) => (
                   <div key={i} className="report-finding-card">
                     <div className="report-finding-header">
                       <b style={{ fontSize: 13 }}>
@@ -2021,7 +2045,7 @@ function App() {
                   No official findings have been logged for this case yet.
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Report Sign-off & Authority Stamp */}
             <div className="report-signature-block">
@@ -2527,7 +2551,7 @@ function App() {
                           + Add Findings
                         </button>
                       )}
-                      {(!isSupervisor && (c.stage === 'Closed' || (c.findings && c.findings.length > 0))) && (
+                      {(role === 'Client' || (!isSupervisor && (c.stage === 'Closed' || (c.findings && c.findings.length > 0)))) && (
                         <button
                           type="button"
                           onClick={() => setReportModalCase(c)}

@@ -20,8 +20,9 @@ Use any valid email and nonempty password in this browser demo. Use the single s
 6. CRO opens Classification after reviewing field findings. The IMS-style Classify Incidents table shows case/detail link, date, victim/accused, incident description, region/branch, amount, current TAT, classification, initial remarks and Submit. Select Genuine, Negligence or Fraud and submit each row to save classification and remarks together. Reports reflect the saved classification; case details retain the remarks. Track Incidents opens Case Board. Missing victim and TAT data display Not recorded / Not set; branch falls back to the company. New cases remain in intake until acknowledged.
 7. Case Board displays New, Acknowledged, Escalated, In progress, Hold and Closed. Open any card for details. CRO and SFSO can change the stage, escalate an acknowledged case, place work on hold, resume or close it, and record recovery up to the case amount.
 8. Clients see only their company's My Cases, Raise a Case, named Mohafiz X company chat and Reports. Field officers cannot see client-company chats or unassigned cases.
-9. Reports filters company (staff only), city, date range, status, classification and case ID. Totals and Export CSV use exactly the filtered rows. Reset clears filters. Formula-like CSV values are escaped.
-10. CRO Audit Logs shows session sign-ins, navigation, case changes, messages and exports. Entries have no edit or removal control.
+9. Client case reports show CRO progress notes while a case is open. Once CRO closes the case after saving findings, client reports show the final findings only, and the company chat receives a case-ID closure notice. CRO reports continue to show both notes and findings.
+10. Reports filters company (staff only), city, date range, status, classification and case ID. Totals and Export CSV use exactly the filtered rows. Reset clears filters. Formula-like CSV values are escaped.
+11. CRO Audit Logs shows session sign-ins, navigation, case changes, messages and exports. Entries have no edit or removal control.
 
 ## Theme and limitations
 

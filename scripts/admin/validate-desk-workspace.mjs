@@ -37,7 +37,7 @@ try {
  grant select,insert,delete on storage.objects to authenticated;`);
  const migrations=process.argv.includes('--bundle')
   ? ['20261102_workbook_import.sql','20261103_workbook_read_access.sql','20261103_scoped_dashboard_timeout_fix.sql','20261103_workflow_realtime_chat.sql']
-  : ['20261102_workbook_import.sql','20261103_workbook_read_access.sql','20261103_scoped_dashboard_timeout_fix.sql','20261103_field_evidence.sql','20261103_workflow_realtime_chat.sql','20261104_portal_parity.sql','20261104_portal_parity_client_only.sql','20261104_portal_workspace_details.sql','20261106_workbook_calculations.sql','20261110_workflow_query_performance.sql','20261111_field_chat_updates.sql'];
+  : ['20261102_workbook_import.sql','20261103_workbook_read_access.sql','20261103_scoped_dashboard_timeout_fix.sql','20261103_field_evidence.sql','20261103_workflow_realtime_chat.sql','20261104_portal_parity.sql','20261104_portal_parity_client_only.sql','20261104_portal_workspace_details.sql','20261106_workbook_calculations.sql','20261110_workflow_query_performance.sql','20261111_field_chat_updates.sql','20261112_incoming_group_calls.sql'];
  for(const filename of migrations){
   try{await db.exec(await readFile(new URL('../../supabase/migrations/'+filename,import.meta.url),'utf8'));}
   catch(error){throw new Error(filename+': '+error.message,{cause:error});}
@@ -166,6 +166,23 @@ try {
   await db.query("insert into realtime.messages(body) values('signal')");
   await login('client');await rejects("insert into realtime.messages(body) values('signal')",[],/row-level security/);
   await login('sfso');await rejects("insert into realtime.messages(body) values('signal')",[],/row-level security/);
+ });
+ await check('Incoming calls ring authorized staff without chat invitations; answer, decline and end are scoped',async()=>{
+  await login('cro');const before=(await db.query('select count(*)::int as n from public.workspace_messages')).rows[0].n;
+  const call=(await db.query("select public.workspace_call_action('start','group:city:Islamabad') as value")).rows[0].value;
+  assert.equal(call.is_caller,true);
+  await login('client');assert.deepEqual((await db.query('select public.workspace_call_state() as value')).rows[0].value,[]);
+  await rejects("select public.workspace_call_action('answer',null,$1)",[call.id],/outside your internal group/);
+  await login('sfso');await rejects("select public.workspace_call_action('answer',null,$1)",[call.id],/outside your internal group/);
+  await login('fso');let state=(await db.query('select public.workspace_call_state() as value')).rows[0].value;assert.equal(state[0].is_caller,false);assert.equal(state[0].status,'ringing');
+  await db.query("select public.workspace_call_action('decline',null,$1)",[call.id]);
+  state=(await db.query('select public.workspace_call_state() as value')).rows[0].value;assert.equal(state[0].my_response,'declined');
+  await login('other');await db.query("select public.workspace_call_action('answer',null,$1)",[call.id]);
+  state=(await db.query('select public.workspace_call_state() as value')).rows[0].value;assert.equal(state[0].my_response,'accepted');assert.equal(state[0].status,'active');
+  await rejects("select public.workspace_call_action('end',null,$1)",[call.id],/Invalid call action/);
+  await login('cro');await db.query("select public.workspace_call_action('end',null,$1)",[call.id]);
+  assert.deepEqual((await db.query('select public.workspace_call_state() as value')).rows[0].value,[]);
+  assert.equal((await db.query('select count(*)::int as n from public.workspace_messages')).rows[0].n,before);
  });
  await check('Bulk dashboard/list queries retain scope across 30,000 additional cases',async()=>{
   await db.exec('reset role');

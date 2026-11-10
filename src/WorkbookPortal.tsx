@@ -5,6 +5,7 @@ import { WORKBOOK_SHA, WORKBOOK_PAGE_SIZE, workbookSelect, workbookListSelect, w
 import './workbook-portal.css';
 import LiveFsoWorkspace from './LiveFsoWorkspace';
 import { workspaceGroups } from './workspaceGroups';
+import GroupCallProvider from './GroupCallProvider';
 import LiveGroupChat from './LiveGroupChat';
 import CaseDetail from './LiveCaseDetail';
 import LiveCaseReport from './LiveCaseReport';
@@ -218,7 +219,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
           {page!=='reports'&&<button aria-label="Reset filters" title="Reset filters" onClick={()=>{setFilters(emptyFilters);setPageNumber(0);}}>Reset filters</button>}
         </div>);
 
-  return <>
+  return <GroupCallProvider profile={profile} light={light}>
     {locationItem&&<LiveLocationModal item={locationItem} onClose={()=>setLocationItem(null)}/>}
     {reportItem&&<LiveCaseReport item={reportItem} onClose={()=>setReportItem(null)}/>}
     {menuOpen&&<button className="mobile-backdrop" aria-label="Close navigation" onClick={()=>setMenuOpen(false)}/>}
@@ -281,5 +282,5 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
       </>}
     </section></main>
     <nav className="mobile-bottom-bar" aria-label="Mobile navigation">{mobileNav.map(([key,label,Icon])=><button key={key} className={'mobile-bottom-item '+(page===key||(key==='dashboard'&&page==='new')?'active':'')} onClick={()=>navigate(key)}><Icon size={17}/><span>{label}</span></button>)}</nav>
-  </>;
+  </GroupCallProvider>;
 }

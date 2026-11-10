@@ -73,8 +73,8 @@ The migration is transactional and rerunnable. Applying it needs SQL Editor sche
 - Only FSOs in internal city chats can share live GPS. Sharing ends after 15 minutes, on Stop,
   or when leaving the chat. The last shared point remains in message history; GPS updates
   require browser permission and an open chat. Other roles cannot publish GPS through the RPC.
-- Internal group calls use WebRTC audio inside the app. Prepare and send the call invitation,
-  then participants select Join group call. Calls support mute/unmute and leave; audio is not
+- Internal group calls use WebRTC audio inside the app. After applying the incoming-call
+  migration below, the call icon rings the group directly and recipients use Answer/Decline. Calls support mute/unmute and leave; audio is not
   recorded by the call feature. Private Supabase broadcast/presence policies authorize city
   staff and deny clients and other-city accounts. Existing unrelated Realtime policies should
   be reviewed if the project grants broader access independently.
@@ -106,3 +106,29 @@ The checks cover note saving, rejection reasons, hub changes, chat search, voice
 and playback controls, FSO-only GPS, mobile layout, and a two-browser WebRTC connection.
 Screenshots go to `outputs/ui-validation`. Live multi-device Supabase calling, TURN traversal,
 and physical GPS accuracy still require deployment/device verification.
+
+## Incoming calls without chat invitations
+
+Apply [20261112_incoming_group_calls.sql](migrations/20261112_incoming_group_calls.sql) after
+20261111, then deploy the updated frontend. SQL Editor label: Enable Incoming Group Calls.
+This creates separate call/response records and publishes call changes to Supabase Realtime.
+It does not send invitation text or URLs into workspace_messages.
+
+The phone icon starts a group call immediately. Eligible logged-in city-group staff receive
+an incoming-call card across the entire portal, including dashboards and case details.
+Answer requests microphone access and joins the in-app WebRTC call; Decline dismisses the
+call for that user without preventing other group members from answering. The caller can
+end the call for everyone; other participants can leave individually. Unanswered calls ring
+for 45 seconds; a caller heartbeat expires abandoned calls after approximately 35 seconds.
+There is a three-second database polling fallback if a Realtime notification is missed.
+
+Desktop notifications are optional and require browser permission. The incoming card offers
+an Enable desktop call notifications button. No closed-browser/mobile push service is installed:
+users must have the portal open and signed in. Background-tab throttling, network loss and
+browser suspension can delay delivery. Calls still require HTTPS/localhost and TURN configuration
+for reliable audio across restrictive networks as described above.
+
+Validation adds database checks for call scope, answer/decline/end, and no invitation messages.
+The browser regression test rings a second user on the Case Details screen, answers/declines,
+checks that the composer remains empty, connects real browser audio peers using mocked signaling,
+and confirms caller hang-up removes the recipient's call panel.

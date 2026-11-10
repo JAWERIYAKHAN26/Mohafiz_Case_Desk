@@ -1,0 +1,150 @@
+[
+  {
+    "role": "CRO",
+    "display_name": "CRO Test",
+    "email": "cro@case-desk.test"
+  },
+  {
+    "role": "CRO Manager",
+    "display_name": "CRO Manager Test",
+    "email": "cro-manager@case-desk.test"
+  },
+  {
+    "role": "SFSO",
+    "city": "Islamabad",
+    "display_name": "SFSO Islamabad Test",
+    "email": "sfso-islamabad@case-desk.test"
+  },
+  {
+    "role": "SFSO",
+    "city": "Lahore",
+    "display_name": "SFSO Lahore Test",
+    "email": "sfso-lahore@case-desk.test"
+  },
+  {
+    "role": "SFSO",
+    "city": "Karachi",
+    "display_name": "SFSO Karachi Test",
+    "email": "sfso-karachi@case-desk.test"
+  },
+  {
+    "role": "SOM",
+    "city": "Islamabad",
+    "display_name": "SOM Islamabad Test",
+    "email": "som-islamabad@case-desk.test"
+  },
+  {
+    "role": "SOM",
+    "city": "Lahore",
+    "display_name": "SOM Lahore Test",
+    "email": "som-lahore@case-desk.test"
+  },
+  {
+    "role": "SOM",
+    "city": "Karachi",
+    "display_name": "SOM Karachi Test",
+    "email": "som-karachi@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Islamabad",
+    "officer_name": "Sara Ahmed",
+    "display_name": "Sara Ahmed",
+    "email": "fso-sara-ahmed@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Islamabad",
+    "officer_name": "Kamran Khan",
+    "display_name": "Kamran Khan",
+    "email": "fso-kamran-khan@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Rawalpindi",
+    "officer_name": "Usman Tariq",
+    "display_name": "Usman Tariq",
+    "email": "fso-usman-tariq@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Rawalpindi",
+    "officer_name": "Haris Mehmood",
+    "display_name": "Haris Mehmood",
+    "email": "fso-haris-mehmood@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Lahore",
+    "officer_name": "Zubair Shah",
+    "display_name": "Zubair Shah",
+    "email": "fso-zubair-shah@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Lahore",
+    "officer_name": "Bilal Hassan",
+    "display_name": "Bilal Hassan",
+    "email": "fso-bilal-hassan@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Lahore",
+    "officer_name": "Hamid Ali",
+    "display_name": "Hamid Ali",
+    "email": "fso-hamid-ali@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Karachi",
+    "officer_name": "Ali Raza",
+    "display_name": "Ali Raza",
+    "email": "fso-ali-raza@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Karachi",
+    "officer_name": "Farhan Qureshi",
+    "display_name": "Farhan Qureshi",
+    "email": "fso-farhan-qureshi@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Karachi",
+    "officer_name": "Waqas Siddiqui",
+    "display_name": "Waqas Siddiqui",
+    "email": "fso-waqas-siddiqui@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Peshawar",
+    "officer_name": "Naveed Afridi",
+    "display_name": "Naveed Afridi",
+    "email": "fso-naveed-afridi@case-desk.test"
+  },
+  {
+    "role": "FSO",
+    "city": "Peshawar",
+    "officer_name": "Gul Khan",
+    "display_name": "Gul Khan",
+    "email": "fso-gul-khan@case-desk.test"
+  },
+  {
+    "role": "Client",
+    "company": "PostEx",
+    "display_name": "PostEx Client Test",
+    "email": "client-postex@case-desk.test"
+  },
+  {
+    "role": "Client",
+    "company": "Daraz",
+    "display_name": "Daraz Client Test",
+    "email": "client-daraz@case-desk.test"
+  },
+  {
+    "role": "Client",
+    "company": "Buscaro",
+    "display_name": "Buscaro Client Test",
+    "email": "client-buscaro@case-desk.test"
+  }
+]

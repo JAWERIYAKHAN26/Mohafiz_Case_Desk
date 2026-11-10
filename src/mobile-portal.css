@@ -1,0 +1,130 @@
+/* Shared mobile portal for FSO, SFSO and SOM; desktop operations keeps its own layout. */
+@media (max-width: 768px) {
+.mobile-portal { max-width: 480px; width: 100%; margin: 0 auto; min-height: 100dvh; box-shadow: 0 0 36px #132e3512; }
+.mobile-portal > main { margin: 0; width: 100%; }
+.mobile-portal > main > header { height: 46px; padding: 0 16px; border: 0; background: var(--bg); }
+.mobile-portal .mobile-menu-btn { display: inline-flex; }
+.mobile-portal .header-role, .mobile-portal .signed-in .hub-tag { display: none; }
+.mobile-portal .signed-in { font-size: 11px; }
+.mobile-portal .header-controls { margin-left: auto; }
+.mobile-portal > aside { position: fixed; left: max(0px, calc(50% - 240px)); top: 0; bottom: 0; width: 280px; max-width: 85vw; z-index: 1300; visibility: hidden; transform: translateX(-110%); transition: transform .2s; }
+.mobile-portal > aside.mobile-open { visibility: visible; transform: translateX(0); }
+.mobile-portal .mobile-drawer-header { display: flex; }
+.mobile-portal .mobile-drawer-close { display: grid; }
+.mobile-portal .mobile-backdrop { display: block; position: fixed; inset: 0; background: #132e3577; z-index: 1250; }
+.mobile-portal .content { padding: 4px 16px 100px; }
+.mobile-portal .heading { min-height: 70px; padding: 14px; margin-bottom: 16px; border-radius: 10px; }
+.mobile-portal .heading h1 { font-size: 19px; }
+.mobile-portal .mobile-bottom-bar { display: flex; position: fixed; bottom: max(10px, env(safe-area-inset-bottom)); left: 50%; right: auto; transform: translateX(-50%); width: min(380px,calc(100% - 40px)); height: 58px; padding: 5px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 30px; box-shadow: 0 5px 24px #132e3515; z-index: 1100; justify-content: space-around; }
+.mobile-portal .mobile-bottom-item { display: flex; flex: 1; flex-direction: column; justify-content: center; align-items: center; position: relative; min-height: 46px; padding: 3px 5px; gap: 3px; border: 0; border-radius: 24px; background: transparent; color: var(--muted); font-size: 9px; text-align: center; cursor: pointer; }
+.mobile-portal .mobile-bottom-item.active { color: var(--button); border: 0; background: var(--soft); }
+.mobile-portal .mobile-bottom-item.active svg { color: var(--button); }
+.mobile-portal .field-overview { padding: 0; border: 0; background: none; box-shadow: none; }
+.mobile-portal .field-officer-line { padding: 14px; background: #10434c; border-radius: 9px; color: #fff; gap: 6px 10px; position: relative; }
+.mobile-portal .field-officer-copy { flex: 1; }
+.mobile-portal .field-officer-copy > small { color: #c1d6dc; font-size: 8px; letter-spacing: 1px; }
+.mobile-portal .field-officer-copy h1 { margin: 3px 0 5px; font-size: 17px; color: #fff; }
+.mobile-portal .field-officer-copy > span { color: #d2e4e4; font-size: 10px; }
+.mobile-portal .field-officer-copy > .field-officer-phone { display: none; }
+.mobile-portal .field-officer-avatar { order: 3; width: 34px; height: 34px; border-radius: 50%; background: #ffffff40; color: #fff; }
+.mobile-portal .field-availability { position: static; order: 4; width: 100%; margin: 0; padding: 0; background: none; border-radius: 0; font-size: 9px; color: #e2ebd9; }
+.mobile-portal .field-availability i { background: #39d78e; }
+.mobile-portal .field-stats { gap: 8px; margin: 9px 0; }
+.mobile-portal .field-stats button { align-items: flex-start; justify-content: flex-start; flex-direction: column; padding: 10px 13px; border-radius: 8px; gap: 3px; background: var(--card); }
+.mobile-portal .field-stats b { order: -1; font-size: 23px; }
+.mobile-portal .field-stats button span { font-size: 10px; }
+.mobile-portal .field-stats button span svg { display: none; }
+.mobile-portal .field-list-heading { display: none; }
+.field-status-filter { display: flex; flex-direction: row; align-items: center; gap: 4px; margin: 0 0 10px; padding: 0 10px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
+.field-status-filter > span { font-size: 11px; color: var(--text); }
+.field-status-filter select { flex: 1; min-height: 40px; border: 0; background-color: transparent; font-size: 11px; padding: 6px; }
+.mobile-portal .field-section { margin-bottom: 15px; }
+.mobile-portal .field-section > h2 { font-size: 11px; margin: 15px 1px 9px; color: var(--muted); }
+.mobile-portal .field-case-grid { grid-template-columns: 1fr; gap: 10px; }
+.mobile-portal .field-case { padding: 14px; border-radius: 10px; border-top-width: 1px; box-shadow: none; }
+.mobile-portal .field-case-top { margin-bottom: 5px; }
+.mobile-portal .field-case-id { font-size: 12px; font-weight: 700; color: var(--text); }
+.mobile-portal .field-priority { font-size: 10px; }
+.mobile-portal .field-case h3 { font-size: 14px; margin: 3px 0; }
+.mobile-portal .field-case-company { font-size: 10px; margin-bottom: 7px; }
+.mobile-portal .field-progress { margin: 12px 0; }
+.mobile-portal .field-progress li { font-size: 9px; padding-top: 6px; }
+.mobile-portal .field-progress li > span { width: 16px; height: 16px; font-size: 8px; }
+.mobile-portal .field-location { padding: 9px 0; gap: 7px; background: transparent; border-radius: 0; border-bottom: 1px solid var(--border); }
+.mobile-portal .field-location small { display: none; }
+.mobile-portal .field-location p { font-size: 11px; margin: 0; }
+.mobile-portal .field-location > svg { width: 14px; height: 14px; margin-top: 2px; }
+.mobile-portal .field-contact { padding: 3px 0; font-size: 11px; }
+.mobile-portal .field-contact a { min-height: 38px; font-size: 10px; }
+.mobile-portal .field-quick-actions { gap: 8px; margin: 7px 0 10px; }
+.mobile-portal .field-quick-actions button { background: var(--soft); border: 0; min-height: 40px; font-size: 11px; border-radius: 7px; }
+.mobile-portal .field-workspace .field-primary, .mobile-portal .field-report-page .field-primary { min-height: 44px; background: var(--button); border-color: var(--button); color: #fff; border-radius: 8px; font-size: 12px; }
+.field-report-nav { width: 100%; justify-content: flex-start; margin-top: 10px; padding: 8px 0; background: transparent; border: 0; color: var(--accent); font-size: 11px; }
+.field-report-nav > svg:last-child { margin-left: auto; }
+.mobile-portal .field-description { padding: 8px 0; font-size: 10px; }
+.mobile-portal .field-busy-action { min-height: 38px; font-size: 10px; }
+.field-report-page { max-width: 460px; margin: 0 auto; }
+.field-report-page-header { display: flex; align-items: center; gap: 20px; padding: 5px 0; }
+.field-report-page-header button { color: var(--accent); background: transparent; border: 0; font-size: 11px; padding: 5px 0; min-height: 36px; }
+.field-report-page-header button svg { transform: rotate(180deg); }
+.field-report-page-header h1 { font-size: 16px; margin: 0; }
+.field-report-case-ref { color: var(--muted); font-size: 10px; margin: 0 0 12px; }
+.field-report-page .field-report { border: 0; margin: 0; }
+.field-report-page .field-report > summary { display: none; }
+.field-report-page .field-report form { gap: 10px; }
+.field-report-page .field-report textarea { min-height: 150px; border: 0; background: var(--soft); padding: 12px; }
+.field-report-page .field-report label { font-size: 11px; }
+.field-report-page .field-attach-actions button { min-height: 65px; flex-direction: column; gap: 6px; background: var(--card); border: 0; border-radius: 8px; }
+.field-report-page .field-evidence-list { display: flex; flex-direction: column; }
+.field-report-page .field-report form > .field-evidence-list .field-evidence { display: grid; grid-template-columns: 40px minmax(0,1fr); align-items: center; gap: 8px; padding: 7px; border: 0; background: var(--card); }
+.field-report-page .field-report form > .field-evidence-list .field-evidence img, .field-report-page .field-report form > .field-evidence-list .field-evidence video { width: 40px; height: 40px; object-fit: cover; }
+.field-report-page .field-report form > .field-evidence-list .field-evidence audio { grid-column: 1 / -1; }
+.field-report-page .field-report form > .field-evidence-list .field-evidence > div { padding: 0; }
+.mobile-portal .field-report-page .field-primary { width: 100%; margin-top: 12px; }
+.mobile-chat-page .content > .heading { display: none; }
+.mobile-portal .single-chat { background: transparent; }
+.mobile-portal .chat-thread-header { padding: 4px 0 10px; background: transparent; border: 0; }
+.mobile-portal .chat-thread-header b { font-size: 17px; }
+.mobile-portal .chat-thread-header small { font-size: 10px; }
+.mobile-portal .messages { height: calc(100dvh - 250px); min-height: 240px; border: 0; background: transparent; padding: 12px 0; margin-bottom: 8px; }
+.mobile-portal .message { max-width: 88%; padding: 9px 11px; background: var(--card); border-radius: 10px; font-size: 12px; }
+.mobile-portal .message.me { background: #10434c; color: #fff; }
+.mobile-portal .message p { font-size: 12px; margin: 4px 0 0; }
+.mobile-portal .chat-search-bar { background: var(--soft); border: 0; border-radius: 12px; }
+.mobile-portal .chat-composer { border-radius: 22px; padding: 4px; }
+.mobile-portal .chat-composer-send { border-radius: 50%; width: 38px; height: 38px; min-height: 38px; flex-basis: 38px; }
+.mobile-portal .tw { border-radius: 10px; }
+.mobile-portal .city-board { grid-template-columns: 1fr; overflow: visible; }
+.mobile-portal .city-board .column { min-height: 0; }
+.mobile-portal .fso-grid { grid-template-columns: 1fr; }
+}
+
+/* Desktop retains the full workspace, filter tabs and inline report form. */
+.field-status-filter, .field-report-nav { display: none; }
+.field-inline-report { display: block; }
+@media (max-width: 768px) {
+  .field-desktop-tabs, .field-inline-report { display: none; }
+  .field-status-filter, .field-report-nav { display: flex; }
+}
+
+/* Match the reference sign-in composition without fake phone or operating-system chrome. */
+@media (max-width: 700px) {
+.login-page { padding: 24px 18px; min-height: 100dvh; }
+.login-layout { display: flex; flex-direction: column; width: 100%; max-width: 420px; gap: 12px; }
+.login-hero { min-height: 150px; padding: 18px; border-radius: 12px; }
+.login-hero-brand { gap: 9px; }
+.login-logo { width: 34px; height: 34px; }
+.login-hero-brand > span:last-child { max-width: none; font-size: 10px; }
+.login-hero-copy { padding-top: 16px; }
+.login-hero-copy h1 { font-size: 25px; line-height: 1.15; margin-bottom: 8px; }
+.login-description { font-size: 12px; max-width: 290px; margin-bottom: 0; }
+.login-card { padding: 20px; border-radius: 12px; }
+.login-card-heading h2 { font-size: 21px; }
+.login-card input { background: #edf0f7; border: 1px solid transparent; border-radius: 7px; min-height: 42px; }
+.login-card .primary { border-radius: 7px; min-height: 42px; }
+.login-demo-access { margin-top: 20px; padding-top: 16px; }
+.login-demo-access select { background: #edf0f7; min-height: 42px; }
+.login-demo-access > button { min-height: 42px; background: transparent; border-color: var(--accent); color: var(--accent); border-radius: 7px; }
+}
+@media(max-width:700px) { .login-hero { min-height: 150px; padding: 18px; } .login-card { padding: 18px; } }
+@media(prefers-reduced-motion:reduce) { .mobile-portal > aside { transition: none; } }

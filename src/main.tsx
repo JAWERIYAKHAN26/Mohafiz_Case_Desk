@@ -1,13 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ShieldCheck, LayoutDashboard, Inbox, Columns3, MessagesSquare, MessageSquareLock,
   Tags, ChartNoAxesCombined, History, ArrowUpRight, Users, BriefcaseBusiness,
-  PlusCircle, Sun, Moon, LogOut, UserRound, MapPin, Phone, Clock, Building2, Search,
+  PlusCircle, LogOut, UserRound, MapPin, Phone, Clock, Building2, Search,
   CheckCircle2, AlertCircle, Navigation, Radio, Send, X, ExternalLink, Check, AlertTriangle,
-  Eye, EyeOff, FileText, Printer, Paperclip, Menu, Smile
+  Eye, EyeOff, FileText, Printer, Paperclip, Menu, Smile, Settings, Bell, RotateCcw
 } from 'lucide-react';
 import './theme-desk.css';
+import AuthScreen from './AuthScreen';
+import WorkbookPortal from './WorkbookPortal';
+import type { WorkbookProfile } from './workbookData';
+import { supabase } from './supabase';
+import { restoreFsoDemoCases } from './fsoDemo';
+import FsoWorkspace from './FsoWorkspace';
+import './mobile-portal.css';
+import { EvidenceList } from './FieldReportForm';
+import { evidenceKind, persistFieldReport, MAX_ATTACHMENTS, EVIDENCE_LIMIT, type FieldSubmission, type SourceRecord } from './fieldEvidence';
 import FollowUps, { FollowUpForm, type FollowUpItem } from './FollowUps';
 
 // Dedicated type for official CRO manual findings
@@ -108,6 +117,8 @@ export type C = {
   accepted?: boolean;
   arrived?: boolean;
   report?: string;
+  fieldReports?: FieldSubmission[];
+  sourceRecord?: SourceRecord;
   findings?: CaseFinding[];
   followUps?: FollowUpItem[];
   source?: string;
@@ -192,9 +203,10 @@ const clientHubs: Record<string, string[]> = {
 };
 
 const nav: Record<string, string[]> = {
-  CRO: ['Dashboard', 'Case Board', 'Reports', 'Audit Logs'],
-  SFSO: ['Escalations', 'Case Board', 'Field Team', 'Audit Logs'],
-  SOM: ['Case Board', 'Field Team', 'Audit Logs'],
+  CRO: ['Dashboard', 'Case Board', 'Reports'],
+  'CRO Manager': ['Dashboard', 'Case Board', 'Reports', 'Audit Logs'],
+  SFSO: ['Escalations', 'Case Board', 'Field Team'],
+  SOM: ['Case Board', 'Field Team'],
   FSO: ['My Cases'],
   Client: ['My Cases', 'Raise a Case', 'Reports'],
 };
@@ -434,13 +446,19 @@ export type Msg = {
 };
 
 function App() {
-  const [showPassword, setShowPassword] = useState(false);
+  const demoActive = useRef(false);
+  const [liveProfile, setLiveProfile] = useState<WorkbookProfile | null>(null);
+  const demoEvidenceUrls = useRef(new Set<string>());
+  useEffect(() => () => { demoEvidenceUrls.current.forEach(url => URL.revokeObjectURL(url)); }, []);
+  const [passwordRecovery, setPasswordRecovery] = useState(() => new URLSearchParams(window.location.search).get('auth') === 'recovery');
+  const [authMessage, setAuthMessage] = useState('');
   const [role, setRole] = useState('CRO');
-  const [activeCroName, setActiveCroName] = useState('Shoaib');
-  const [loginEmail, setLoginEmail] = useState('shoaib@mohafiz.pk');
+  const [activeCroName, setActiveCroName] = useState('CRO');
   const [sfsoCity, setSfsoCity] = useState<'Islamabad' | 'Lahore' | 'Karachi'>('Islamabad'); // 3 SFSOs
+  const isCro = role === 'CRO' || role === 'CRO Manager';
+  const canViewAuditLogs = role === 'CRO Manager';
   const isSupervisor = role === 'SFSO' || role === 'SOM';
-  const canManageFollowUps = role === 'CRO';
+  const canManageFollowUps = isCro;
   const [co, setCo] = useState('PostEx');
   const [signed, setSigned] = useState(false);
   const [signedInEmail, setSignedInEmail] = useState('');
@@ -513,6 +531,8 @@ function App() {
   const [reportModalCase, setReportModalCase] = useState<C | null>(null);
   const [intake, setIntake] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [showDashboardBack, setShowDashboardBack] = useState(false);
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [light, setLight] = useState(() => {
     try {
       return localStorage.getItem('desk-theme') !== 'dark';
@@ -535,16 +555,9 @@ function App() {
   // Active FSO Info & City
   const activeOfficer = officers.find(o => o.name === activeFsoName) || officers[0];
   const fsoCity = activeOfficer.city;
-  const fsoCaseMatchesFilter = (caseItem: C) => {
-    if (fsoCaseFilter === 'open') return caseItem.stage !== 'Closed';
-    if (fsoCaseFilter === 'closed') return caseItem.stage === 'Closed';
-    if (fsoCaseFilter === 'inProgress') return caseItem.stage === 'In progress' && !caseItem.isQueued;
-    if (fsoCaseFilter === 'pending') return caseItem.stage !== 'Closed' && (caseItem.isQueued || caseItem.stage !== 'In progress');
-    return true;
-  };
 
   const name =
-    role === 'CRO'
+    isCro
       ? activeCroName
       : isSupervisor
       ? role === 'SOM' ? `SOM ${sfsoCity}` : `${activeSfso.name} (${sfsoCity})`
@@ -589,8 +602,10 @@ function App() {
   const log = (action: string, id = '—') =>
     setLogs(v => [{ user: name + ' • ' + role, action, id, time: time(), at: Date.now(), role, city: cases.find(c => c.id === id)?.city || (isSupervisor ? sfsoCity : role === 'FSO' ? fsoCity : '') }, ...v]);
 
-  const go = (p: string) => {
+  const go = (p: string, fromDashboard = false) => {
+    if (p === 'Audit Logs' && !canViewAuditLogs) return;
     setPage(p);
+    setShowDashboardBack(fromDashboard);
     setDetail('');
     setIntake(false);
     setNotice('');
@@ -611,7 +626,7 @@ function App() {
     if (isSupervisor) return sfsoCityMatches(c.city, sfsoCity);
     return true; // CRO sees all
   });
-  const cityChatPages = role === 'CRO'
+  const cityChatPages = isCro
     ? cityGroups.map(city => cityGroupPage(city))
     : isSupervisor
     ? [cityGroupPage(sfsoCity)]
@@ -660,7 +675,7 @@ function App() {
     const thread = msgs[key] || [];
     const cursor = chatReadCursors[`${name}:${channel}:${caseId}`] || 0;
     return thread.slice(cursor).filter(message =>
-      message.user !== name && !(role === 'CRO' && message.role === 'CRO')
+      message.user !== name && !(isCro && message.role === 'CRO')
     ).length;
   };
   const getUnreadGroupCount = (groupPage: string) => {
@@ -670,7 +685,7 @@ function App() {
     const channel = company ? 'c' : 'i';
     const key = company ? clientGroupKey(company) : internalGroupKey(city!);
     const groupUnread = (msgs[key] || []).slice(chatReadCursors[`${name}:${key}`] || 0).filter(message =>
-      message.user !== name && !(role === 'CRO' && message.role === 'CRO')
+      message.user !== name && !(isCro && message.role === 'CRO')
     ).length;
     const caseUnread = chatCasesForPage(groupPage).reduce((count, caseItem) => count + getUnreadCount(channel, caseItem.id), 0);
     return groupUnread + caseUnread;
@@ -678,16 +693,15 @@ function App() {
   const internalUnreadCount =
     visible.reduce((count, caseItem) => count + getUnreadCount('i', caseItem.id), 0) +
     cityChatPages.reduce((count, groupPage) => count + getUnreadGroupCount(groupPage), 0);
-  const openUnreadInternalChat = () => {
+  const openUnreadInternalChat = (fromDashboard = false) => {
     const firstUnreadCase = visible.find(caseItem => getUnreadCount('i', caseItem.id) > 0);
     const unreadGroup = cityChatPages.find(groupPage => getUnreadGroupCount(groupPage) > 0);
     const targetGroup = firstUnreadCase
       ? cityGroupPage(firstUnreadCase.city)
       : unreadGroup || cityGroupPage(isSupervisor ? sfsoCity : role === 'FSO' ? fsoCity : 'Islamabad');
     if (firstUnreadCase) setSelected(firstUnreadCase.id);
-    go(targetGroup);
+    go(targetGroup, fromDashboard);
   };
-  const fsoAssignedCases = role === 'FSO' ? visible.filter(fsoCaseMatchesFilter) : [];
 
   // FSOs visible to the user:
   // SFSO only sees FSOs in their city!
@@ -695,10 +709,7 @@ function App() {
     isSupervisor ? sfsoCityMatches(o.city, sfsoCity) : true
   );
 
-  const visibleLogs = logs.filter(entry =>
-    (!isSupervisor || sfsoCityMatches(entry.city, sfsoCity)) &&
-    (role !== 'SOM' || ['SFSO', 'FSO', 'SOM'].includes(entry.role))
-  );
+  const visibleLogs = canViewAuditLogs ? logs : [];
 
   const filtered = visible.filter(c =>
     Object.entries(f).every(
@@ -717,11 +728,11 @@ function App() {
 
   const patch = (c: C, v: Partial<C>, action: string) => {
     const current = cases.find(item => item.id === c.id) || c;
-    if (v.stage === 'Closed' && role !== 'CRO') {
+    if (v.stage === 'Closed' && !isCro) {
       setNotice('Only a CRO can close a case.');
       return;
     }
-    if (v.findings && role !== 'CRO') {
+    if (v.findings && !isCro) {
       setNotice('Only a CRO can add case findings.');
       return;
     }
@@ -912,18 +923,23 @@ function App() {
   };
 
   // SFSO Assigns Case to Officer (Initial or Reassignment)
-  const assignCaseBySfso = (caseItem: C, chosenOfficer: string) => {
-    if (!isSupervisor || !visible.some(item => item.id === caseItem.id) ||
-        !visibleFSOs.some(officer => officer.name === chosenOfficer)) {
+  const assignCaseBySfso = (caseItem: C, chosenOfficer: string, sfsoUnavailable = false) => {
+    const eligibleOfficer = visibleFSOs.find(officer => officer.name === chosenOfficer);
+    if ((!isSupervisor && !(isCro && sfsoUnavailable)) ||
+        !(caseItem.stage === 'Escalated' || (isCro && caseItem.stage === 'New')) || !visible.some(item => item.id === caseItem.id) ||
+        !eligibleOfficer || (isCro && eligibleOfficer.city !== caseItem.city)) {
       setNotice('Select an officer from your city desk before assigning this case.');
       return;
     }
     const workload = getFsoWorkload(chosenOfficer);
+    const acknowledgement = caseItem.stage === 'New'
+      ? { acknowledgedAt: time(), acknowledgedBy: `${name} (${role})` }
+      : {};
     const internalKey = internalConversationKey(caseItem);
     const wasReassigned = Boolean(caseItem.busyReason);
-    const reassignedNote = wasReassigned
+    const reassignedNote = (isCro ? ' (SFSO unavailable; assigned by CRO)' : '') + (wasReassigned
       ? ` (Reassigned from ${caseItem.busyByOfficer || 'previous officer'} who reported unable to proceed)`
-      : '';
+      : '');
 
     if (workload.isBusy) {
       const newQueueOrder = workload.queuedCount + 1;
@@ -931,6 +947,7 @@ function App() {
         caseItem,
         {
           officer: chosenOfficer,
+          ...acknowledgement,
           stage: 'Escalated',
           isQueued: true,
           queueOrder: newQueueOrder,
@@ -967,6 +984,7 @@ function App() {
         caseItem,
         {
           officer: chosenOfficer,
+          ...acknowledgement,
           stage: 'In progress',
           isQueued: false,
           queueOrder: 0,
@@ -1018,12 +1036,20 @@ function App() {
     </label>
   );
 
-  const filter = (k: string, label: string, values: string[]) =>
-    select(label, ['All', ...values], f[k] || 'All', v => setF({ ...f, [k]: v }));
+  const filter = (k: string, label: string, values: string[], placeholder = false) =>
+    placeholder ? (
+      <label>
+        <select aria-label={label} value={f[k] || ''} onChange={e => setF({ ...f, [k]: e.target.value })}>
+          <option value="" disabled>{label}</option>
+          <option value="All">All</option>
+          {values.map(value => <option key={value} value={value}>{value}</option>)}
+        </select>
+      </label>
+    ) : select(label, ['All', ...values], f[k] || 'All', v => setF({ ...f, [k]: v }));
 
   const current = visible.find(c => c.id === selected) || visible[0];
   const pageLabel = (value: string) => value;
-  const mobileNavPages = navPages.slice(0, 4);
+  const mobileNavPages = role === 'FSO' ? navPages.slice(0, 2) : navPages.slice(0, 4);
 
   // Send message or live location in chat
   const send = (channel: string, file?: File, liveLocation = false, targetCase?: C) => {
@@ -1083,6 +1109,57 @@ function App() {
   };
 
   useEffect(() => {
+    if (!supabase) return;
+    let recovering = new URLSearchParams(window.location.search).get('auth') === 'recovery';
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (demoActive.current) return;
+      if (event === 'PASSWORD_RECOVERY') {
+        recovering = true;
+        setPasswordRecovery(true);
+        setSigned(false);
+        return;
+      }
+      if (!session) {
+        if (event === 'SIGNED_OUT') {
+          recovering = false;
+          setPasswordRecovery(false);
+        }
+        setSigned(false);
+        setSignedInEmail('');
+        setLiveProfile(null);
+        return;
+      }
+      if (recovering) return;
+      // Roles must be assigned by an administrator, never by editable user metadata.
+      const access = session.user.app_metadata;
+      const accountRole = typeof access.role === 'string' ? access.role : '';
+      const city = access.city;
+      const officer = officers.find(item => item.name === access.officer_name && item.city === city);
+      const valid = Object.hasOwn(nav, accountRole) &&
+        (!(accountRole === 'SFSO' || accountRole === 'SOM') || ['Islamabad', 'Lahore', 'Karachi'].includes(city)) &&
+        (accountRole !== 'Client' || (typeof access.company === 'string' && !!access.company.trim())) &&
+        (accountRole !== 'FSO' || (typeof access.officer_name === 'string' && !!access.officer_name.trim() && typeof city === 'string' && !!city.trim()));
+      if (!valid) {
+        setSigned(false);
+        setAuthMessage('Your account needs an assigned role and coverage. Contact your administrator.');
+        return;
+      }
+      setAuthMessage('');
+      setLiveProfile({ role: accountRole, name: access.display_name || access.officer_name || accountRole, email: session.user.email || '', city: typeof city === 'string' ? city : '', company: typeof access.company === 'string' ? access.company : '', officerName: typeof access.officer_name === 'string' ? access.officer_name : '' });
+      setDetail('');
+      setRole(accountRole);
+      if (accountRole === 'CRO' || accountRole === 'CRO Manager') setActiveCroName(access.display_name || accountRole);
+      if (accountRole === 'Client') setCo(access.company);
+      if (accountRole === 'SFSO' || accountRole === 'SOM') setSfsoCity(city);
+      if (officer) setActiveFsoName(officer.name);
+      setSignedInEmail(session.user.email || '');
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') setPage(nav[accountRole][0]);
+      setSigned(true);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
     const channel = companies.some(company => companyGroupPage(company) === page) ? 'c' : cityGroups.some(city => cityGroupPage(city) === page) ? 'i' : '';
     if (!signed || !channel) return;
     const groupCases = chatCasesForPage(page);
@@ -1117,7 +1194,7 @@ function App() {
         ? `SOM ${sfsoCity} (SOM)`
         : role === 'FSO'
         ? `${activeFsoName} (FSO)`
-        : role === 'CRO'
+        : isCro
         ? `${activeCroName} (CRO)`
         : `${co} client`;
       const receiptKey = `${name}:${groupKey}`;
@@ -1313,7 +1390,6 @@ function App() {
             </button>
           </form>
 
-          <small>Messages are visible in this group. Case-linked updates include their Case ID.</small>
         </section>
       ) : (
         <div className="empty">No cases are available in this group.</div>
@@ -1378,7 +1454,12 @@ function App() {
 
   // Client / CRO Case Intake Form
   const [formCompany, setFormCompany] = useState(role === 'Client' ? co : 'PostEx');
-  const availableHubs = clientHubs[formCompany] || clientHubs['PostEx'];
+  const [formCity, setFormCity] = useState('Rawalpindi');
+  const [formHub, setFormHub] = useState('');
+  const intakeCompany = role === 'Client' ? co : formCompany;
+  const availableHubs = (clientHubs[intakeCompany] || []).filter(hub =>
+    hub.includes(formCity) || (formCity === 'Rawalpindi' && hub.includes('Pindi'))
+  );
 
   const intakeForm = (
     <form
@@ -1421,7 +1502,7 @@ function App() {
           officer: '',
           date: '2026-10-28',
           description,
-          source: role === 'CRO' ? String(d.get('source')) : 'Client Portal',
+          source: isCro ? String(d.get('source')) : 'Client Portal',
         };
 
         setSelected(id);
@@ -1435,17 +1516,16 @@ function App() {
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
         <h2>{role === 'Client' ? `Raise a Case — ${co}` : 'Log a Case (CRO Intake)'}</h2>
-        <span className="chip new">All fields compulsory *</span>
       </div>
 
-      {role === 'CRO' && (
+      {isCro && (
         <label>
-          Client Company <span className="req">*</span>
+          Client Company
           <select
             name="co"
             required
             value={formCompany}
-            onChange={e => setFormCompany(e.target.value)}
+            onChange={e => { setFormCompany(e.target.value); setFormHub(''); }}
           >
             {companies.map(v => (
               <option key={v} value={v}>
@@ -1459,7 +1539,7 @@ function App() {
       {/* Row 1: Issue & Priority */}
       <div className="grid">
         <label>
-          Issue Type <span className="req">*</span>
+          Issue Type
           <select name="issue" required defaultValue="">
             <option value="" disabled>
               Select issue type (Required)
@@ -1477,7 +1557,7 @@ function App() {
         </label>
 
         <label>
-          Priority <span className="req">*</span>
+          Priority
           <select name="priority" required defaultValue="Medium">
             <option>High</option>
             <option>Medium</option>
@@ -1486,23 +1566,11 @@ function App() {
         </label>
       </div>
 
-      {/* Row 2: Client Hub & City */}
+      {/* Row 2: City & Client Hub */}
       <div className="grid">
         <label>
-          Who Raised Case (Client Hub / Branch) <span className="req">*</span>
-          <select name="hub" required defaultValue={availableHubs[0]}>
-            {availableHubs.map(h => (
-              <option key={h} value={h}>
-                {h}
-              </option>
-            ))}
-            <option value="Other Hub">Other Hub / Custom Branch</option>
-          </select>
-        </label>
-
-        <label>
-          City <span className="req">*</span>
-          <select name="city" required defaultValue="Rawalpindi">
+          City
+          <select name="city" required value={formCity} onChange={e => { setFormCity(e.target.value); setFormHub(''); }}>
             {cities.map(v => (
               <option key={v} value={v}>
                 {v}
@@ -1510,11 +1578,32 @@ function App() {
             ))}
           </select>
         </label>
+
+        <label>
+          Who Raised Case (Client Hub / Branch)
+          <select name="hub" required value={formHub} onChange={e => setFormHub(e.target.value)}>
+            <option value="" disabled>Select a hub / branch</option>
+            {availableHubs.map(h => (
+              <option key={h} value={h}>
+                {h}
+              </option>
+            ))}
+            <option value="Other Hub">Other Hub / Custom Branch</option>
+          </select>
+          {availableHubs.length === 0 && <small>No listed hubs for this city. Choose Other Hub / Custom Branch.</small>}
+        </label>
       </div>
+
+      {formHub === 'Other Hub' && (
+        <label>
+          Custom Hub / Branch Name
+          <input key={`${intakeCompany}-${formCity}`} name="customHub" required minLength={2} pattern=".*\S.*" placeholder="Enter the hub or branch name" />
+        </label>
+      )}
 
       {/* Row 3: Exact Location (Required by client) */}
       <label>
-        Exact Location (Client-Reported Location / Landmark) <span className="req">*</span>
+        Exact Location (Client-Reported Location / Landmark)
         <input
           name="exactLocation"
           required
@@ -1526,12 +1615,12 @@ function App() {
       {/* Row 4: Rider Details & Incident Time */}
       <div className="grid">
         <label>
-          Rider Name <span className="req">*</span>
+          Rider Name
           <input name="riderName" required minLength={2} placeholder="e.g. Muhammad Zeeshan" />
         </label>
 
         <label>
-          Rider Contact Number <span className="req">*</span>
+          Rider Contact Number
           <input
             name="riderPhone"
             required
@@ -1544,7 +1633,7 @@ function App() {
 
       <div className="grid">
         <label>
-          Incident Time <span className="req">*</span>
+          Incident Time
           <input
             name="incidentTime"
             type="text"
@@ -1555,14 +1644,14 @@ function App() {
         </label>
 
         <label>
-          Amount Involved (PKR) <span className="req">*</span>
+          Amount Involved (PKR)
           <input name="amount" type="number" min="1" required placeholder="e.g. 25000" defaultValue="15000" />
         </label>
       </div>
 
-      {role === 'CRO' && (
+      {isCro && (
         <label>
-          Intake Channel <span className="req">*</span>
+          Intake Channel
           <select name="source" required defaultValue="Phone">
             <option>Phone Hotline</option>
             <option>Email Escalation</option>
@@ -1573,7 +1662,7 @@ function App() {
       )}
 
       <label>
-        What Happened (Incident Description) <span className="req">*</span>
+        What Happened (Incident Description)
         <textarea
           name="description"
           minLength={20}
@@ -1621,7 +1710,7 @@ function App() {
   };
 
   return (
-    <div className={'desk ' + (!signed || light ? 'light' : '')}>
+    <div className={'desk ' + (!signed || light ? 'light' : '') + (signed && (role === 'FSO' || isSupervisor) ? ' mobile-portal' : '') + (signed && role === 'FSO' && page === 'My Cases' && !c ? ' fso-cases-page' : '') + (signed && (role === 'FSO' || isSupervisor) && cityChatPages.includes(page) && !c ? ' mobile-chat-page' : '')}>
       {/* Exact Location & Map Preview Modal */}
       {viewLocCase && (
         <div className="modal-overlay" onClick={() => setViewLocCase(null)}>
@@ -2068,136 +2157,43 @@ function App() {
       )}
 
       {!signed ? (
-        <div className="login-page">
-          <div className="login-layout">
-            <section className="login-hero" aria-label="Mohafiz Secure System">
-              <div className="login-hero-brand">
-                <img className="login-logo" src="/images/mohafiz-logo.png" alt="Mohafiz Secure" width={72} height={72} />
-                <span>Secure incident workflow portal</span>
-              </div>
-              <div className="login-hero-copy">
-                <h1>Mohafiz<br />Secure System</h1>
-                <p className="login-description">Log incidents, assign them to the right city desk, and follow each one through to resolution.</p>
-              </div>
-            </section>
-
-            <section className="login-card">
-              <div className="login-card-heading">
-                <div>
-                  <h2>Sign in</h2>
-                </div>
-              </div>
-              <form
-                onSubmit={e => {
-                  e.preventDefault();
-                  setSignedInEmail(loginEmail.trim());
-                  setSigned(true);
-                  setShowPassword(false);
-                  setPage(nav[role][0]);
-                  log('Signed in as ' + name);
-                }}
-              >
-                <label>
-                  Email
-                  <input type="email" autoComplete="username" placeholder="you@company.com" required value={loginEmail} readOnly={role === 'CRO'} onChange={e => setLoginEmail(e.target.value)} />
-                </label>
-                <div className="password-field">
-                  <label htmlFor="login-password">Password</label>
-                  <div className="password-input">
-                    <input
-                      id="login-password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Enter your password"
-                      autoComplete="current-password"
-                      defaultValue="demo"
-                      required
-                    />
-                    <button
-                      type="button"
-                      className="password-toggle-btn"
-                      aria-controls="login-password"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      title={showPassword ? 'Hide password' : 'Show password'}
-                      aria-pressed={showPassword}
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
-                {select(
-                  'Demo: sign in as',
-                  [
-                    'CRO',
-                    'CRO Shoaib',
-                    'CRO Waleed',
-                    'CRO Tahmoor',
-                    'CRO Talib',
-                    'CRO Asad',
-                    'SFSO Islamabad (Ahmed)',
-                    'SFSO Lahore (Hamza)',
-                    'SFSO Karachi (Tariq)',
-                    'SOM Islamabad',
-                    'SOM Lahore',
-                    'SOM Karachi',
-                    ...officers.map(officer => `FSO ${officer.city} (${officer.name})`),
-                    ...companies.map(company => 'Client ' + company),
-                  ],
-                  role === 'CRO'
-                    ? `CRO ${activeCroName}`
-                    : role === 'Client'
-                    ? 'Client ' + co
-                    : isSupervisor
-                    ? role === 'SOM' ? `SOM ${sfsoCity}` : `SFSO ${sfsoCity} (${sfsoDesks[sfsoCity].name})`
-                    : role === 'FSO'
-                    ? `FSO ${fsoCity} (${activeFsoName})`
-                    : role,
-                  value => {
-                    if (value.startsWith('Client ')) {
-                      setRole('Client');
-                      setCo(value.slice(7));
-                    } else if (value.startsWith('SFSO ') || value.startsWith('SOM ')) {
-                      setRole(value.startsWith('SOM ') ? 'SOM' : 'SFSO');
-                      if (value.includes('Lahore')) setSfsoCity('Lahore');
-                      else if (value.includes('Karachi')) setSfsoCity('Karachi');
-                      else setSfsoCity('Islamabad');
-                    } else if (value.startsWith('FSO ')) {
-                      setRole('FSO');
-                      const match = officers.find(o => value.includes(o.name));
-                      if (match) {
-                        setActiveFsoName(match.name);
-                        setLoginEmail(`${match.name.toLowerCase().replaceAll(' ', '.')}@mohafiz.pk`);
-                      }
-                    } else if (value.startsWith('CRO ')) {
-                      const croName = value.slice(4);
-                      setRole('CRO');
-                      setActiveCroName(croName);
-                      setLoginEmail(`${croName.toLowerCase()}@mohafiz.pk`);
-                    } else {
-                      setRole(value);
-                    }
-                  }
-                )}
-                <button className="primary full">Sign in</button>
-                <button
-                  className="link"
-                  type="button"
-                  onClick={() =>
-                    setNotice('Password reset is simulated. Contact your administrator for account access.')
-                  }
-                >
-                  Forgot password?
-                </button>
-              </form>
-              <small className="login-demo">Demo: choose any role to inspect city isolation.</small>
-              {notice && (
-                <p className="login-status" role="status">
-                  {notice}
-                </p>
-              )}
-            </section>
-          </div>
-        </div>
+        <AuthScreen recovery={passwordRecovery} message={authMessage} onRecovered={() => { setPasswordRecovery(false); window.history.replaceState({}, "", window.location.pathname); }}
+          demoOptions={['CRO', 'CRO Manager', ...Object.keys(sfsoDesks).map(city => `SFSO ${city}`), ...Object.keys(sfsoDesks).map(city => `SOM ${city}`), ...officers.map(officer => `FSO ${officer.city} (${officer.name})`), ...companies.map(company => `Client ${company}`)]}
+          onDemo={import.meta.env.DEV ? selection => {
+            demoActive.current = true;
+            setLiveProfile(null);
+            let demoRole = selection;
+            if (selection.startsWith('Client ')) {
+              demoRole = 'Client'; setCo(selection.slice(7));
+            } else if (selection.startsWith('SFSO ') || selection.startsWith('SOM ')) {
+              demoRole = selection.startsWith('SFSO ') ? 'SFSO' : 'SOM';
+              setSfsoCity(selection.slice(demoRole.length + 1) as 'Islamabad' | 'Lahore' | 'Karachi');
+            } else if (selection.startsWith('FSO ')) {
+              demoRole = 'FSO';
+              const officer = officers.find(item => selection === `FSO ${item.city} (${item.name})`);
+              if (officer) {
+                setActiveFsoName(officer.name);
+                setCases(current => restoreFsoDemoCases(current, officer));
+                setFsoCaseFilter('all');
+                setSelected(cases.find(item => item.officer === officer.name && item.stage === 'In progress')?.id || `DEMO-${officer.name.toUpperCase().replaceAll(' ', '-')}-ACTIVE`);
+              }
+            } else { setActiveCroName(selection); }
+            setRole(demoRole);
+            setPage(nav[demoRole][0]);
+            setSignedInEmail('Demo mode');
+            setAuthMessage(''); setNotice(''); setDetail(''); setIntake(false); setShowDashboardBack(false);
+            setSigned(true);
+          } : undefined}
+        />
+      ) : !demoActive.current ? (
+        liveProfile ? <WorkbookPortal profile={liveProfile} light={light}
+          onTheme={value => { setLight(value); try { localStorage.setItem('desk-theme', value ? 'light' : 'dark'); } catch {} }}
+          onLogout={async () => {
+            if (!supabase) throw new Error('Database connection is unavailable.');
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+            setLiveProfile(null); setSigned(false); setDetail('');
+          }} /> : <p role="status">Loading account?</p>
       ) : (
         <>
           {/* Mobile Backdrop Scrim */}
@@ -2261,7 +2257,7 @@ function App() {
                 <span className="signed-in">
 
                 {/* SOM stays on the city selected at sign-in. */}
-                {role === 'SFSO' && (
+                {role === 'SFSO' && demoActive.current && (
                   <span style={{ marginLeft: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <small style={{ color: 'var(--muted)', fontWeight: 600 }}>Switch City Desk:</small>
                     <select
@@ -2291,7 +2287,6 @@ function App() {
               </span>
             </div>
             <div className="header-controls">
-                <span className="date">28 October 2026</span>
                 <details className="account-menu" onKeyDown={event => {
                   if (event.key === 'Escape') {
                     event.currentTarget.open = false;
@@ -2303,39 +2298,50 @@ function App() {
                   </summary>
                   <button className="account-menu-backdrop" type="button" tabIndex={-1} aria-label="Close account options" onClick={event => event.currentTarget.closest('details')?.removeAttribute('open')} />
                   <div className="account-menu-panel">
-                    <small>Signed in with</small>
-                    <b>{signedInEmail}</b>
-                    <button type="button" onClick={() => {
+                    <div className="account-profile">
+                      <span className="account-profile-avatar"><UserRound size={36} strokeWidth={1.5} /></span>
+                      <b className="account-profile-welcome">Welcome {name}</b>
+                      {name !== role && <span className="account-profile-role">{role}</span>}
+                      <small className="account-profile-email">{signedInEmail}</small>
+                    </div>
+                    <div className="account-menu-actions">
+                    <button type="button" aria-expanded={accountSettingsOpen} onClick={() => setAccountSettingsOpen(value => !value)}><Settings size={18} />Account Settings</button>
+                    {accountSettingsOpen && <div className="account-settings-fields">
+                      <label>Email<input value={signedInEmail} readOnly /></label>
+                      <label>Appearance<select value={light ? 'light' : 'dark'} onChange={event => {
+                        const nextLight = event.target.value === 'light';
+                        setLight(nextLight);
+                        try { localStorage.setItem('desk-theme', nextLight ? 'light' : 'dark'); } catch {}
+                      }}><option value="light">Light</option><option value="dark">Dark</option></select></label>
+                    </div>}
+                    <button type="button" onClick={event => {
+                      event.currentTarget.closest('details')?.removeAttribute('open');
+                      openUnreadInternalChat();
+                    }}><Bell size={18} />Notifications{internalUnreadCount > 0 && <span className="account-notification-count">{internalUnreadCount}</span>}</button>
+                    <button type="button" className="account-logout" onClick={async () => {
+                      const wasDemo = demoActive.current;
+                      demoActive.current = false;
+                      if (supabase && !wasDemo) {
+                        const { error } = await supabase.auth.signOut();
+                        if (error) { setNotice(error.message); return; }
+                      }
                       log('Signed out');
                       setSigned(false);
                       setSignedInEmail('');
-                      setShowPassword(false);
                       setNotice('');
                       setMobileNavOpen(false);
+                      setAccountSettingsOpen(false);
                     }}><LogOut size={16} />Log out</button>
+                    </div>
                   </div>
                 </details>
-                <button
-                  className="theme-toggle"
-                  aria-label="Toggle theme"
-                  title={light ? 'Switch to dark mode' : 'Switch to light mode'}
-                  aria-pressed={!light}
-                  onClick={() => {
-                    setLight(!light);
-                    try {
-                      localStorage.setItem('desk-theme', light ? 'dark' : 'light');
-                    } catch {}
-                  }}
-                >
-                  {light ? <Moon size={18} /> : <Sun size={18} />}
-                </button>
               </div>
             </header>
 
             <section className={c ? "content case-detail-content" : "content"}>
               <div className="heading">
                 <div>
-                  <div className="eyebrow">
+                  {(page !== 'New Cases' || c || intake) && <div className="eyebrow">
                     {c
                       ? 'CASE DETAILS'
                       : intake
@@ -2345,7 +2351,7 @@ function App() {
                       : isSupervisor
                       ? `${role} ${sfsoCity.toUpperCase()} • ${categories[page]}`
                       : categories[page]}
-                  </div>
+                  </div>}
                   <h1>
                     {c
                       ? `Case ${c.id}`
@@ -2356,6 +2362,11 @@ function App() {
                       : pageLabel(page)}
                   </h1>
                 </div>
+                {isCro && showDashboardBack && page !== 'Dashboard' && page !== 'New Cases' && !c && !intake && (
+                  <button type="button" className="back-to-dashboard" onClick={() => go('Dashboard')}>
+                    Back to Dashboard
+                  </button>
+                )}
                 {page === 'Classification' && !c && (
                   <button className="track-incidents" onClick={() => go('Case Board')}>
                     Track Incidents
@@ -2363,10 +2374,10 @@ function App() {
                 )}
                 {page === 'New Cases' && (
                   <div className="actions">
-                    <button type="button" onClick={() => go('Dashboard')}>Back to Dashboard</button>
-                    <button className="primary" onClick={() => setIntake(!intake)}>
+                    {showDashboardBack && <button type="button" className="back-to-dashboard" onClick={() => go('Dashboard')}>Back to Dashboard</button>}
+                    {!isCro && <button className="primary" onClick={() => setIntake(!intake)}>
                       {intake ? 'Cancel' : '+ Log a case'}
-                    </button>
+                    </button>}
                   </div>
                 )}
               </div>
@@ -2386,7 +2397,7 @@ function App() {
                   <div style={{ display: 'flex', gap: 10, marginBottom: 15 }}>
                     <button onClick={() => setDetail('')}>← Back to list</button>
                     {/* CRO Direct Case Management Buttons */}
-                    {role === 'CRO' && (
+                    {isCro && (
                       <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
                         {c.stage === 'New' && (
                           <button
@@ -2424,6 +2435,27 @@ function App() {
                     )}
                   </div>
 
+                    {isCro && (c.stage === 'New' || c.stage === 'Escalated') && !c.isQueued && (
+                      <form className="box" key={`cro-assign-${c.id}`} onSubmit={event => {
+                        event.preventDefault();
+                        const assignment = new FormData(event.currentTarget);
+                        assignCaseBySfso(c, String(assignment.get('officer') || ''), assignment.get('sfsoUnavailable') === 'on');
+                      }}>
+                        <h3>Assign Field Officer</h3>
+                        <div className="bar">
+                          <label>FSO<select name="officer" required defaultValue="">
+                            <option value="" disabled>Select FSO</option>
+                            {visibleFSOs.filter(officer => officer.city === c.city).map(officer => {
+                              const workload = getFsoWorkload(officer.name);
+                              return <option key={officer.name} value={officer.name}>{officer.name} — {workload.isBusy ? 'Busy (assign to queue)' : 'Free'}</option>;
+                            })}
+                          </select></label>
+                          <label style={{ flexDirection: 'row', alignItems: 'center' }}><input type="checkbox" name="sfsoUnavailable" required style={{ width: 'auto' }} />SFSO is unavailable</label>
+                          <button type="submit" className="primary" disabled={!visibleFSOs.some(officer => officer.city === c.city)}>Assign FSO</button>
+                        </div>
+                        {!visibleFSOs.some(officer => officer.city === c.city) && <small>No FSOs available for this city.</small>}
+                      </form>
+                    )}
                   <div className="field-service-layout">
                   <div className="box field-service-main">
                     <div className="service-title"><div><small>FIELD SERVICE ? {c.city}</small><h2>{c.issue} ? {c.riderName || c.co}</h2></div>{chip(c.stage)}</div>
@@ -2506,11 +2538,11 @@ function App() {
                       </p>
                     )}
                     {c.initialRemarks && <p>Initial remarks: {c.initialRemarks}</p>}
-                    {c.report && <p>Field report: {c.report}</p>}
+                    {c.fieldReports?.length ? c.fieldReports.map(report => <EvidenceList key={report.id} report={report} />) : c.report && <p>Field report: {c.report}</p>}
 
                     </section>
 
-                    {(role === 'CRO' || isSupervisor) && (
+                    {(isCro || isSupervisor) && (
                       <div className="bar" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                         <label>
                           Recovered Amount (PKR)
@@ -2538,7 +2570,7 @@ function App() {
                       >
                         Open Case Conversation →
                       </button>
-                      {role === 'CRO' && c.stage !== 'Closed' && (
+                      {isCro && c.stage !== 'Closed' && (
                         <button
                           type="button"
                           onClick={() => {
@@ -2569,12 +2601,12 @@ function App() {
                         </button>
                       )}
                     </div>
-                    {c.stage !== 'Closed' && !c.findings?.some(finding => finding.kind !== 'classification' && finding.text.trim()) && role === 'CRO' && (
+                    {c.stage !== 'Closed' && !c.findings?.some(finding => finding.kind !== 'classification' && finding.text.trim()) && isCro && (
                       <p className="sub" style={{ color: '#d97706', fontWeight: 500 }}>
                         ⚠️ Case findings are compulsory before closing this case. Click "+ Add Findings" to record findings and attach files.
                       </p>
                     )}
-                    {role === 'CRO' && findingsCaseId === c.id && c.stage !== 'Closed' && (
+                    {isCro && findingsCaseId === c.id && c.stage !== 'Closed' && (
                       <form
                         style={{
                           marginTop: 16,
@@ -2713,8 +2745,8 @@ function App() {
                     )}
                   </div>
                   <section className="service-activity box" aria-label="Case notes and activity">
-                    <div className="service-activity-actions"><button onClick={() => { setSelected(c.id); go(role === 'FSO' ? cityGroupPage(c.city) : companyGroupPage(c.co)); }}>Send message</button>{role === 'CRO' && <button type="button" aria-expanded={inlineFollowUpCase === c.id} aria-controls="inline-follow-up" onClick={() => setInlineFollowUpCase(current => current === c.id ? '' : c.id)}>Log notes</button>}</div>
-                    {role === 'CRO' && inlineFollowUpCase === c.id && (
+                    <div className="service-activity-actions"><button onClick={() => { setSelected(c.id); go(role === 'FSO' ? cityGroupPage(c.city) : companyGroupPage(c.co)); }}>Send message</button>{isCro && <button type="button" aria-expanded={inlineFollowUpCase === c.id} aria-controls="inline-follow-up" onClick={() => setInlineFollowUpCase(current => current === c.id ? '' : c.id)}>Log notes</button>}</div>
+                    {isCro && inlineFollowUpCase === c.id && (
                       <section id="inline-follow-up" className="inline-follow-up log-note-composer" aria-label="Log an internal note">
                         <span className="note-avatar" aria-hidden="true"><UserRound size={18} /></span>
                         <FollowUpForm key={c.id} item={c} showClassification noteMode onClassificationChange={classification => {
@@ -2736,7 +2768,7 @@ function App() {
                       </section>
                     )}
                     <h3>Case activity</h3>
-                    {visibleLogs.filter(entry => entry.id === c.id).length === 0 && <p className="sub">No activity recorded yet.</p>}
+                    {canViewAuditLogs && visibleLogs.filter(entry => entry.id === c.id).length === 0 && <p className="sub">No activity recorded yet.</p>}
                     {visibleLogs.filter(entry => entry.id === c.id).map((entry, index) => <article className="service-event" key={entry.at + '-' + index}><small>{entry.time}</small><b>{entry.user}</b><p>{entry.action}</p></article>)}
                     {(c.followUps || []).map((entry, index) => <article className="service-event" key={'follow-' + index}><small>{new Date(entry.at).toLocaleString()}</small><b>{entry.author}</b><p>{entry.text}</p>{entry.attachments?.map((file, index) => <a className="service-evidence" key={index} href={file.url} download={file.name}>{file.kind}: {file.name}</a>)}</article>)}
                   </section>
@@ -2763,27 +2795,26 @@ function App() {
                   )}
                   {page === 'Dashboard' && (
                     <>
-                      <p className="sub">Operational command center. Everything requiring immediate review.</p>
                       <div className="stats">
-                        <button className="stat" onClick={() => go('New Cases')}>
+                        <button className="stat" onClick={() => go('New Cases', true)}>
                           <span>To acknowledge</span>
                           <b>{cases.filter(c => c.stage === 'New').length}</b>
-                          <small>View new cases →</small>
                         </button>
-                        <button className="stat" onClick={openUnreadInternalChat}>
+                        <button className="stat" onClick={() => { setBoardCity(''); setBoardStatus('Pending'); go('Case Board', true); }}>
+                          <span>Pending cases</span>
+                          <b>{cases.filter(c => c.stage !== 'Closed' && (c.isQueued || c.stage !== 'In progress')).length}</b>
+                        </button>
+                        <button className="stat" onClick={() => openUnreadInternalChat(true)}>
                           <span>Updates to review</span>
                           <b>{internalUnreadCount}</b>
-                          <small>Unread internal messages →</small>
                         </button>
-                        <button className="stat" onClick={() => go('Case Board')}>
+                        <button className="stat" onClick={() => go('Case Board', true)}>
                           <span>In progress</span>
                           <b>{cases.filter(c => c.stage === 'In progress').length}</b>
-                          <small>Board view →</small>
                         </button>
-                        <button className="stat" onClick={() => go('Case Board')}>
+                        <button className="stat" onClick={() => go('Case Board', true)}>
                           <span>Closed cases</span>
                           <b>{cases.filter(c => c.stage === 'Closed').length}</b>
-                          <small>Historical records →</small>
                         </button>
                       </div>
 
@@ -2791,12 +2822,9 @@ function App() {
                         <div>
                           <div className="eyebrow">CRO ACTION DESK</div>
                           <h2>{cases.filter(c => c.stage === 'New').length} New Cases Pending Review</h2>
-                          <p className="sub">
-                            Acknowledge incoming cases to auto-notify clients with generated reference IDs and forward to city SFSO desks.
-                          </p>
                         </div>
-                        <button className="primary new-cases-button" onClick={() => go('New Cases')}>
-                          Open New Cases →
+                        <button className="primary new-cases-button" onClick={() => go('New Cases', true)}>
+                          New Cases
                         </button>
                       </div>
 
@@ -2821,7 +2849,7 @@ function App() {
                   {page === 'New Cases' && (
                     <>
                       <div className="tw">
-                        <table>
+                        <table className="new-cases-table">
                           <thead>
                             <tr>
                               <th colSpan={7} className="new-cases-filter-cell">
@@ -2830,9 +2858,9 @@ function App() {
                                     <span className="sr-only">Search Case ID</span>
                                     <input type="search" placeholder="Search by Case ID..." value={f.search || ''} onChange={event => setF(values => ({ ...values, search: event.target.value }))} />
                                   </label>
-                                  {filter('co', 'Company', companies)}
-                                  {filter('city', 'City', cities)}
-                                  {filter('priority', 'Priority', ['High', 'Medium', 'Low'])}
+                                  {filter('co', 'Company', companies, true)}
+                                  {filter('city', 'City', cities, true)}
+                                  {filter('priority', 'Priority', ['High', 'Medium', 'Low'], true)}
                                 </div>
                               </th>
                             </tr>
@@ -2915,9 +2943,6 @@ function App() {
                   {/* Page: Escalations (SFSO City Isolation) */}
                   {page === 'Escalations' && (
                     <>
-                      <p className="sub">
-                        <b>{sfsoCity} Region</b> field dispatch console. Managing <b>{sfsoCity}</b> cases and <b>{sfsoCity}</b> FSOs.
-                      </p>
 
                       {/* Escalated Cases Table for Assignment in this City (Top Segment) */}
                       <h2 style={{ marginTop: 16, marginBottom: 8 }}>
@@ -3338,13 +3363,12 @@ function App() {
                   {page === 'Case Board' && (
                     <>
                       <div className="city-board-filters">
-                        <label>City<select value={boardCity} onChange={e => setBoardCity(e.target.value)}><option value="">All cities</option>{Array.from(new Set(visible.map(item => item.city))).sort().map(city => <option key={city}>{city}</option>)}</select></label>
-                        <label>Status<select value={boardStatus} onChange={e => setBoardStatus(e.target.value)}><option value="">All statuses</option>{['Open', 'Closed', 'Hold', 'In progress'].map(status => <option key={status}>{status}</option>)}</select></label>
-                        <span>City-wise case board</span>
+                        <label><span className="sr-only">City</span><select value={boardCity} onChange={e => setBoardCity(e.target.value)}><option value="" disabled hidden>City</option>{Array.from(new Set(visible.map(item => item.city))).sort().map(city => <option key={city}>{city}</option>)}</select></label>
+                        <label><span className="sr-only">Status</span><select value={boardStatus} onChange={e => setBoardStatus(e.target.value)}><option value="" disabled hidden>Status</option>{['Open', 'Pending', 'Closed', 'Hold', 'In progress'].map(status => <option key={status}>{status}</option>)}</select></label>
                       </div>
                       <div className="board city-board">
                         {Array.from(new Set(visible.map(item => item.city))).sort().filter(city => !boardCity || city === boardCity).map(city => {
-                          const cityCases = visible.filter(item => item.city === city && (!boardStatus || (boardStatus === 'Open' ? item.stage !== 'Closed' : item.stage === boardStatus)));
+                          const cityCases = visible.filter(item => item.city === city && (!boardStatus || (boardStatus === 'Open' ? item.stage !== 'Closed' : boardStatus === 'Pending' ? item.stage !== 'Closed' && (item.isQueued || item.stage !== 'In progress') : item.stage === boardStatus)));
                           return (
                           <section className="column" key={city}>
                             <h3>
@@ -3403,7 +3427,7 @@ function App() {
                     chat(companies.some(company => companyGroupPage(company) === page) ? 'c' : 'i')}
 
                   {/* Page: Classification (CRO) */}
-                  {page === 'Classification' && role === 'CRO' && (
+                  {page === 'Classification' && isCro && (
                     <div className="tw classification-table">
                       <table>
                         <thead>
@@ -3529,9 +3553,6 @@ function App() {
                   {/* Page: My Cases (Client) */}
                   {page === 'My Cases' && role === 'Client' && (
                     <>
-                      <p className="sub">
-                        {co} cases intake and tracking. Follow requests from initial logging to resolution.
-                      </p>
                       {/* Clickable KPI filter cards for Client */}
                       <div className="stats" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
                         <button
@@ -3617,7 +3638,7 @@ function App() {
                       )}
 
                       <div className="tw">
-                        <table>
+                        <table className="client-cases-table">
                           <thead>
                             <tr>
                               <th>Case ID</th>
@@ -3653,7 +3674,7 @@ function App() {
                                     <small>{c.date}</small>
                                   </td>
                                   <td>
-                                    <span className="hub-tag">{c.hub || 'Central Hub'}</span>
+                                    <span className="client-case-hub">{c.hub || 'Central Hub'}</span>
                                   </td>
                                   <td>
                                     <b>{c.issue}</b>
@@ -3673,45 +3694,23 @@ function App() {
                                   <td>{chip(c.priority)}</td>
                                   <td>{chip(c.stage)}</td>
                                   <td>
-                                    {c.stage === 'New' ? (
-                                      <span style={{ color: '#eab308', fontWeight: 600, fontSize: 11 }}>
-                                        ⏳ Received — Awaiting CRO Acknowledgement
+                                    <div className="client-workflow">
+                                      <span className={`client-workflow-text ${c.stage === 'Closed' ? 'resolved' : c.stage === 'New' || c.stage === 'Hold' || c.isQueued || c.stage === 'Escalated' ? 'waiting' : 'active'}`}>
+                                        {c.stage === 'Closed' ? 'Resolved & Closed'
+                                          : c.stage === 'New' ? 'Received — Awaiting CRO Acknowledgement'
+                                          : c.stage === 'Hold' ? 'On Hold'
+                                          : c.isQueued ? `Queued for Field Team${c.officer ? ` (${c.officer})` : ''}`
+                                          : c.stage === 'Escalated' ? 'Awaiting Field Officer Assignment'
+                                          : c.stage === 'In progress' ? `Dispatched to Field Team${c.officer ? ` (${c.officer})` : ''}`
+                                          : c.stage}
                                       </span>
-                                    ) : c.stage === 'Closed' ? (
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                        <span style={{ color: '#10b981', fontWeight: 600, fontSize: 11 }}>
-                                          ✓ Resolved & Closed
-                                        </span>
-                                        <button
-                                          type="button"
-                                          className="loc-pill"
-                                          style={{ fontSize: 10, padding: '3px 8px', color: 'var(--accent)', borderColor: 'var(--border)' }}
-                                          onClick={() => setReportModalCase(c)}
-                                          title="View official resolution report"
-                                        >
-                                          <FileText size={10} />
-                                          <span>View Report</span>
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                        <span style={{ color: '#246f68', fontWeight: 600, fontSize: 11 }}>
-                                          🚀 Dispatched to Field Team ({c.officer || 'SFSO Assigned'})
-                                        </span>
-                                        {c.findings && c.findings.length > 0 && (
-                                          <button
-                                            type="button"
-                                            className="loc-pill"
-                                            style={{ fontSize: 10, padding: '3px 8px', color: 'var(--accent)', borderColor: 'var(--border)' }}
-                                            onClick={() => setReportModalCase(c)}
-                                            title="View official resolution report"
-                                          >
-                                            <FileText size={10} />
-                                            <span>View Report</span>
-                                          </button>
-                                        )}
-                                      </div>
-                                    )}
+                                      {(c.stage === 'Closed' || !!c.findings?.length) && <button
+                                        type="button"
+                                        className="client-report-link"
+                                        onClick={() => setReportModalCase(c)}
+                                        title="View official resolution report"
+                                      ><FileText size={12} /><span>View Report</span></button>}
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -3729,352 +3728,51 @@ function App() {
                     </>
                   )}
 
-                  {/* Page: My Cases (FSO Mobile Style Workspace) */}
-                  {page === 'My Cases' && role === 'FSO' && (
-                    <div className="fso-workspace">
-                      {/* Officer Profile & City Header */}
-                      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                          <div>
-                            <h2 style={{ margin: 0, fontSize: 16 }}>Field Officer Console</h2>
-                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              <span>Officer: <b style={{ color: 'var(--text)' }}>{name}</b></span>
-                              <span className="hub-tag" style={{ background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0', fontSize: 9 }}>
-                                📍 {fsoCity} Coverage
-                              </span>
-                              <span>📞 {activeOfficer.phone}</span>
-                            </div>
-                          </div>
-                          <span className={'fso-status-badge ' + (getFsoWorkload(name).isBusy ? 'busy' : 'free')} style={{ fontSize: 9 }}>
-                            <span className="fso-status-dot"></span>
-                            {getFsoWorkload(name).isBusy ? 'STATUS: BUSY' : 'STATUS: FREE (READY)'}
-                          </span>
-                        </div>
-
-                        <div className="fso-case-filters" role="group" aria-label="Filter assigned cases">
-                          {([
-                            ['all', 'All', visible.length],
-                            ['open', 'Open', visible.filter(c => c.stage !== 'Closed').length],
-                            ['closed', 'Closed', visible.filter(c => c.stage === 'Closed').length],
-                            ['inProgress', 'In progress', visible.filter(c => c.stage === 'In progress' && !c.isQueued).length],
-                            ['pending', 'Pending', visible.filter(c => c.stage !== 'Closed' && (c.isQueued || c.stage !== 'In progress')).length],
-                          ] as const).map(([filterKey, label, count]) => (
-                            <button
-                              key={filterKey}
-                              type="button"
-                              className="fso-case-filter"
-                              aria-pressed={fsoCaseFilter === filterKey}
-                              onClick={() => setFsoCaseFilter(filterKey)}
-                            >
-                              {label} ({count})
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Section 1 & 2: Assigned Cases */}
-                      <>
-                        {(fsoCaseFilter === 'all' || fsoCaseFilter === 'open' || fsoCaseFilter === 'inProgress') && <>
-                          <div style={{ marginBottom: 18 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', marginBottom: 8 }}>
-                            ⚡ Current Active Cases ({fsoAssignedCases.filter(c => c.stage === 'In progress' && !c.isQueued).length})
-                          </div>
-
-                        {fsoAssignedCases
-                          .filter(c => c.stage === 'In progress' && !c.isQueued)
-                          .map(c => (
-                            <div className="box fso-case-card fso-active-case" key={c.id}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <h3>{c.id}</h3>
-                                {chip(c.priority)}
-                              </div>
-                              <p style={{ margin: '4px 0 8px', fontSize: 12 }}>
-                                <b>{c.co}</b> • {c.hub} • {c.issue}
-                              </p>
-
-                              {/* Exact Location Card for FSO */}
-                              <div
-                                style={{
-                                  background: 'var(--soft)',
-                                  padding: 10,
-                                  borderRadius: 6,
-                                  margin: '8px 0',
-                                  fontSize: 11,
-                                }}
-                              >
-                                <div style={{ color: 'var(--muted)', fontSize: 9 }}>EXACT DISPATCH LOCATION:</div>
-                                <b style={{ color: 'var(--text)', display: 'block', margin: '2px 0 4px' }}>
-                                  📍 {c.exactLocation || c.city}
-                                </b>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                                  <span>
-                                    Rider: <b>{c.riderName}</b>
-                                  </span>
-                                  <span>
-                                    Phone: <b>{c.riderPhone}</b>
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div style={{ display: 'flex', gap: 6, margin: '8px 0' }}>
-                                <button
-                                  type="button"
-                                  className="loc-pill"
-                                  onClick={() => setViewLocCase(c)}
-                                  style={{ flex: 1, justifyContent: 'center' }}
-                                >
-                                  <Navigation size={12} />
-                                  <span>Open Map Pin</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="loc-pill fso-chat-action"
-                                  onClick={() => {
-                                    setSelected(c.id);
-                                    go(cityGroupPage(c.city));
-                                  }}
-                                  aria-label={`Open Case Group for ${c.id}`}
-                                  title={`Open Case Group for ${c.id}`}
-                                >
-                                  <MessagesSquare size={15} />
-                                  <span>Chat</span>
-                                </button>
-                              </div>
-
-                              {c.stage !== 'Closed' && (
-                                <>
-                                  {/* Acknowledge Button if not yet acknowledged */}
-                                  {!c.fsoAcknowledged && !c.accepted ? (
-                                    <button
-                                      type="button"
-                                      className="primary full"
-                                      style={{
-                                        background: '#059669',
-                                        borderColor: '#059669',
-                                        padding: '9px 12px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: 6,
-                                        fontWeight: 700,
-                                        fontSize: 12,
-                                        margin: '4px 0 8px',
-                                      }}
-                                      onClick={() => handleFsoAcknowledge(c)}
-                                    >
-                                      <CheckCircle2 size={15} />
-                                      <span>✓ Acknowledge Case & Start Dispatch</span>
-                                    </button>
-                                  ) : (
-                                    <div style={{ fontSize: 11, color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 0 6px' }}>
-                                      <CheckCircle2 size={13} />
-                                      <span>Acknowledged at {c.fsoAcknowledgedAt || c.date} — En route / Active</span>
-                                    </div>
-                                  )}
-
-                                  <button
-                                    className="full"
-                                    disabled={(!c.fsoAcknowledged && !c.accepted) || c.arrived}
-                                    onClick={() => patch(c, { arrived: true }, 'Arrival confirmed (Simulated GPS)')}
-                                  >
-                                    {c.arrived ? '✓ Arrival Confirmed (On Scene)' : 'Confirm Arrival'}
-                                  </button>
-
-                                  {/* Report Busy / Unable to Proceed */}
-                                  <button
-                                    type="button"
-                                    style={{
-                                      background: '#fff1f2',
-                                      color: '#be123c',
-                                      border: '1px solid #fecdd3',
-                                      fontSize: 11,
-                                      padding: '8px 12px',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      gap: 6,
-                                      width: '100%',
-                                      margin: '8px 0 12px',
-                                      borderRadius: 6,
-                                      fontWeight: 600,
-                                      cursor: 'pointer',
-                                    }}
-                                    onClick={() => {
-                                      setBusyModalCase(c);
-                                      setBusyReasonText('');
-                                    }}
-                                    title="Report that you are busy or working elsewhere and cannot handle this case"
-                                  >
-                                    <AlertTriangle size={13} />
-                                    <span>Report Busy / Unable to Proceed</span>
-                                  </button>
-
-                                  <form
-                                    onSubmit={e => {
-                                      e.preventDefault();
-                                      const d = new FormData(e.currentTarget);
-                                      patch(
-                                        c,
-                                        {
-                                          report: String(d.get('report')),
-                                        },
-                                        'Field report submitted'
-                                      );
-                                      e.currentTarget.reset();
-                                    }}
-                                  >
-                                    <label>
-                                      Field Findings
-                                      <textarea
-                                        name="report"
-                                        required
-                                        minLength={20}
-                                        placeholder="Record detailed field findings (at least 20 chars)..."
-                                      />
-                                    </label>
-                                    <button className="full primary" disabled={!c.arrived}>
-                                      Send Field Report
-                                    </button>
-                                  </form>
-                                </>
-                              )}
-                            </div>
-                          ))}
-
-                        {!fsoAssignedCases.some(c => c.stage === 'In progress' && !c.isQueued) && (
-                          <div className="empty" style={{ padding: 15, fontSize: 12 }}>
-                            No active cases in progress right now. You are free for immediate dispatch!
-                          </div>
-                        )}
-                      </div>
-                        </>}
-
-                      {/* Section 2: Queued / Upcoming Cases (To do after current case) */}
-                      {(fsoCaseFilter === 'all' || fsoCaseFilter === 'open' || fsoCaseFilter === 'pending') && <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#bd9851', textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span>📋 Upcoming Queued Cases ({fsoAssignedCases.filter(c => c.isQueued && c.stage !== 'Closed').length})</span>
-                        </div>
-
-                        {fsoAssignedCases
-                          .filter(c => c.isQueued && c.stage !== 'Closed')
-                          .map((c, idx) => (
-                            <div
-                              className="box"
-                              key={c.id}
-                              style={{ borderLeft: '3px solid #bd9851', background: 'var(--card)' }}
-                            >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span className="queued-badge">Upcoming Case #{idx + 1}</span>
-                                {chip(c.priority)}
-                              </div>
-                              <h3 style={{ margin: '8px 0 4px' }}>{c.id}</h3>
-                              <p style={{ margin: 0, fontSize: 12 }}>
-                                {c.co} • {c.hub} • {c.issue}
-                              </p>
-
-                              <div style={{ background: 'var(--soft)', padding: 8, borderRadius: 5, margin: '8px 0', fontSize: 11 }}>
-                                <div>📍 Location: <b>{c.exactLocation || c.city}</b></div>
-                                <div style={{ marginTop: 2 }}>Rider: <b>{c.riderName}</b> ({c.riderPhone})</div>
-                              </div>
-
-                              <p className="badge-queued-notice" style={{ margin: '6px 0 10px' }}>
-                                ℹ️ Assigned by ${role} to execute immediately after your active case is resolved.
-                              </p>
-
-                              <button
-                                className="primary full"
-                                style={{ background: 'var(--button)', borderColor: 'var(--button)' }}
-                                onClick={() =>
-                                  patch(
-                                    c,
-                                    { isQueued: false, stage: 'In progress', accepted: true },
-                                    'Started next queued case: ' + c.id
-                                  )
-                                }
-                              >
-                                Start This Case Next Now →
-                              </button>
-
-                              <button
-                                type="button"
-                                style={{
-                                  background: '#fff1f2',
-                                  color: '#be123c',
-                                  border: '1px solid #fecdd3',
-                                  fontSize: 11,
-                                  padding: '8px 12px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: 6,
-                                  width: '100%',
-                                  marginTop: 8,
-                                  borderRadius: 6,
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                }}
-                                onClick={() => {
-                                  setBusyModalCase(c);
-                                  setBusyReasonText('');
-                                }}
-                                title="Report that you are busy or working elsewhere and cannot handle this queued case"
-                              >
-                                <AlertTriangle size={13} />
-                                <span>Report Busy / Unable to Proceed</span>
-                              </button>
-                            </div>
-                          ))}
-
-                        {!fsoAssignedCases.some(c => c.isQueued && c.stage !== 'Closed') && (
-                          <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', padding: 10 }}>
-                            No queued cases pending.
-                          </div>
-                        )}
-                      </div>}
-                      {(fsoCaseFilter === 'all' || fsoCaseFilter === 'open' || fsoCaseFilter === 'pending') && <section style={{ marginBottom: 18 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>
-                          Pending Cases ({fsoAssignedCases.filter(c => c.stage !== 'Closed' && c.stage !== 'In progress' && !c.isQueued).length})
-                        </div>
-                        {fsoAssignedCases.filter(c => c.stage !== 'Closed' && c.stage !== 'In progress' && !c.isQueued).map(c => (
-                          <div className="box" key={c.id} style={{ marginBottom: 8 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><b>{c.id}</b>{chip(c.stage)}</div>
-                            <p style={{ margin: '6px 0', fontSize: 12 }}><b>{c.co}</b> • {c.hub} • {c.issue}</p>
-                            <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>📍 {c.exactLocation || c.city} • Rider: {c.riderName || 'N/A'}</p>
-                            <button type="button" className="loc-pill" style={{ marginTop: 8 }} onClick={() => { setSelected(c.id); go(cityGroupPage(c.city)); }}>Open City Chat</button>
-                          </div>
-                        ))}
-                        {!fsoAssignedCases.some(c => c.stage !== 'Closed' && c.stage !== 'In progress' && !c.isQueued) && <p className="sub">No pending cases.</p>}
-                      </section>}
-                      {(fsoCaseFilter === 'all' || fsoCaseFilter === 'closed') && <section style={{ marginBottom: 18 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 8 }}>
-                          Closed Cases ({fsoAssignedCases.filter(c => c.stage === 'Closed').length})
-                        </div>
-                        {fsoAssignedCases.filter(c => c.stage === 'Closed').map(c => (
-                          <div className="box" key={c.id} style={{ marginBottom: 8 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><b>{c.id}</b>{chip(c.stage)}</div>
-                            <p style={{ margin: '6px 0', fontSize: 12 }}><b>{c.co}</b> • {c.hub} • {c.issue}</p>
-                            <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>📍 {c.exactLocation || c.city} • Rider: {c.riderName || 'N/A'}</p>
-                          </div>
-                        ))}
-                        {!fsoAssignedCases.some(c => c.stage === 'Closed') && <p className="sub">No closed cases.</p>}
-                      </section>}
-                    </>
-                  </div>
-                )}
+                  {/* Page: FSO mobile workspace */}
+                  {page === 'My Cases' && role === 'FSO' && <FsoWorkspace
+                    cases={visible}
+                    officer={activeOfficer}
+                    filter={fsoCaseFilter}
+                    onFilter={setFsoCaseFilter}
+                    onMap={setViewLocCase}
+                    onChat={item => { setSelected(item.id); go(cityGroupPage(item.city)); }}
+                    onAcknowledge={handleFsoAcknowledge}
+                    onArrive={item => patch(item, { arrived: true }, 'Arrival confirmed (Simulated GPS)')}
+                    onReport={async (item, text, files, progress) => {
+                      const current = cases.find(candidate => candidate.id === item.id);
+                      if (role !== 'FSO' || !current || current.officer !== name || !current.arrived || current.stage !== 'In progress') throw new Error('You can submit reports only for your active case after arrival.');
+                      if (text.trim().length < 20 || files.length > MAX_ATTACHMENTS || files.some(file => !evidenceKind(file.type) || !file.size || file.size > EVIDENCE_LIMIT)) throw new Error('Check the report text and attachment limits.');
+                      let submission: FieldSubmission;
+                      if (demoActive.current) {
+                        submission = { id: crypto.randomUUID(), text, author: name, at: new Date().toISOString(), demo: true,
+                          attachments: files.map(file => {
+                            const url = URL.createObjectURL(file); demoEvidenceUrls.current.add(url);
+                            return { id: crypto.randomUUID(), name: file.name, kind: evidenceKind(file.type)!, type: file.type, size: file.size, url };
+                          }) };
+                      } else {
+                        submission = await persistFieldReport(current.sourceRecord, text, files, progress);
+                      }
+                      patch(current, { report: text, fieldReports: [...(current.fieldReports || []), submission] }, 'Field report submitted' + (files.length ? ` with ${files.length} evidence attachments` : ''));
+                      return submission;
+                    }}
+                    onBusy={item => { setBusyModalCase(item); setBusyReasonText(''); }}
+                    onStartQueued={item => patch(item, { isQueued: false, stage: 'In progress', accepted: true }, 'Started next queued case: ' + item.id)}
+                  />}
 
                   {/* Page: Reports */}
                   {page === 'Reports' && (
-                    <>
-                      <p className="sub">
-                        {role === 'Client'
-                          ? `Consolidated reports for ${co} only.`
-                          : isSupervisor
-                          ? `Operational reports for ${sfsoCity} Region cases.`
-                          : 'Operational analytics. Filter by company, city, date, status, classification, or Case ID.'}
-                      </p>
-                      <div className="bar">
+                    <div className="reports-page">
+                      <div className="bar reports-filters" style={{ '--report-filter-count': 5 + Number(role !== 'Client') + Number(!isSupervisor) } as React.CSSProperties}>
+                        <div className="reports-filter-toolbar">
+                          <span>From</span>
+                          <span>To</span>
+                          <div className="reports-filter-actions">
+                            <button className="reports-reset" type="button" aria-label="Reset report filters" title="Reset filters" onClick={() => setF({})}><RotateCcw size={16} /></button>
+                            <button className="primary reports-export" onClick={exportCsv}>Export CSV</button>
+                          </div>
+                        </div>
                         <label>
-                          From
+                          <span className="sr-only">From</span>
                           <input
                             type="date"
                             value={f.from || ''}
@@ -4082,7 +3780,7 @@ function App() {
                           />
                         </label>
                         <label>
-                          To
+                          <span className="sr-only">To</span>
                           <input
                             type="date"
                             value={f.to || ''}
@@ -4090,44 +3788,40 @@ function App() {
                             onChange={e => setF({ ...f, to: e.target.value })}
                           />
                         </label>
-                        {role !== 'Client' && filter('co', 'Company', companies)}
-                        {!isSupervisor && filter('city', 'City', cities)}
-                        {filter('stage', 'Status', stages)}
-                        {filter('cls', 'Classification', ['Genuine', 'Negligence', 'Fraud'])}
+                        {role !== 'Client' && filter('co', 'Company', companies, true)}
+                        {!isSupervisor && filter('city', 'City', cities, true)}
+                        {filter('stage', 'Status', stages, true)}
+                        {filter('cls', 'Classification', ['Genuine', 'Negligence', 'Fraud'], true)}
                         <label>
-                          Case ID
+                          <span className="sr-only">Case ID</span>
                           <input
                             placeholder="Search ID..."
                             value={f.search || ''}
                             onChange={e => setF({ ...f, search: e.target.value })}
                           />
                         </label>
-                        <button onClick={() => setF({})}>Reset</button>
-                        <button className="primary" onClick={exportCsv}>
-                          Export CSV
-                        </button>
                       </div>
 
-                      <div className="stats">
-                        <div className="stat">
+                      <div className="stats reports-stats">
+                        <div className="stat report-total">
                           <span>Total Cases</span>
                           <b>{filtered.length}</b>
                           <small>Filtered records</small>
                         </div>
-                        <div className="stat">
+                        <div className="stat report-exposure">
                           <span>Total Exposure (PKR)</span>
                           <b>{filtered.reduce((n, c) => n + c.amount, 0).toLocaleString()}</b>
                           <small>Reported exposure</small>
                         </div>
-                        <div className="stat">
+                        <div className="stat report-recovered">
                           <span>Recovered (PKR)</span>
                           <b>{filtered.reduce((n, c) => n + c.recovered, 0).toLocaleString()}</b>
                           <small>Recovered amount</small>
                         </div>
                       </div>
 
-                      <div className="tw">
-                        <table>
+                      <div className="tw reports-table-wrap">
+                        <table className="reports-table">
                           <thead>
                             <tr>
                               <th>Case ID</th>
@@ -4148,12 +3842,16 @@ function App() {
                             {filtered.map(c => (
                               <tr key={c.id}>
                                 <td>
-                                  <b>{c.id}</b>
+                                  <button type="button" className="link report-case-link" onClick={() => {
+                                    setDetail(c.id);
+                                    log('Opened case', c.id);
+                                  }}><b>{c.id}</b></button>
+                                  <small>{c.date}</small>
                                 </td>
                                 <td>
                                   <div className="co-hub-cell">
                                     <b>{c.co}</b>
-                                    <span className="hub-tag">{c.hub || 'Central Hub'}</span>
+                                    <small className="report-hub">{c.hub || 'Central Hub'}</small>
                                   </div>
                                 </td>
                                 <td>{c.date}</td>
@@ -4177,13 +3875,12 @@ function App() {
                                 <td>
                                   <button
                                     type="button"
-                                    className="loc-pill"
-                                    style={{ fontWeight: 600, color: 'var(--accent)', borderColor: 'var(--border)' }}
+                                    className="report-generate-icon"
+                                    aria-label={`Generate report for ${c.id}`}
                                     onClick={() => setReportModalCase(c)}
                                     title="Generate and print official incident resolution report including findings"
                                   >
-                                    <FileText size={11} />
-                                    <span>Generate Report</span>
+                                    <FileText size={17} />
                                   </button>
                                 </td>
                               </tr>
@@ -4192,15 +3889,12 @@ function App() {
                         </table>
                         {!filtered.length && <div className="empty">No matching records found.</div>}
                       </div>
-                    </>
+                    </div>
                   )}
 
                   {/* Page: Audit Logs */}
-                  {page === 'Audit Logs' && (
+                  {page === 'Audit Logs' && canViewAuditLogs && (
                     <>
-                      <p className="sub">
-                        Session activity log: FSO, SFSO and SOM actions, messages and dispatches. Times include date and seconds in Pakistan time (PKT).
-                      </p>
                       <div className="tw">
                         <table>
                           <thead>
@@ -4244,10 +3938,6 @@ function App() {
                 </>
               )}
             </section>
-            <footer>
-              <span>Mohafiz • Secure. Track. Resolve.</span>
-              <span>Operations Desk Prototype • Real-time in-memory workflow</span>
-            </footer>
           </main>
 
           {/* Mobile Bottom Quick-Access Thumb Bar (Visible on mobile screens only) */}
@@ -4264,12 +3954,12 @@ function App() {
                   aria-label={p}
                 >
                   <Icon size={18} />
-                  <span>{pageLabel(p).split(' ')[0]}</span>
+                  <span>{cityChatPages.includes(p) ? 'City Chat' : pageLabel(p)}</span>
                   {unreadCount > 0 && <span className="mobile-unread-badge">{unreadCount > 4 ? '4+' : unreadCount}</span>}
                 </button>
               );
             })}
-            <button
+            {role !== 'FSO' && <button
               type="button"
               className={'mobile-bottom-item ' + (mobileNavOpen ? 'active' : '')}
               onClick={() => setMobileNavOpen(true)}
@@ -4277,7 +3967,7 @@ function App() {
             >
               <Menu size={18} />
               <span>Menu</span>
-            </button>
+            </button>}
           </nav>
         </>
       )}

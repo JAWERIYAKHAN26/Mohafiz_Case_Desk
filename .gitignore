@@ -1,6 +1,11 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.*.local
 *.log
 mohafiz-site.zip
 outputs/
+
+__pycache__/
+*.py[cod]

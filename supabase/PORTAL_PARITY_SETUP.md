@@ -124,7 +124,7 @@ Then deploy the updated frontend. Running only the incoming-call migration is in
 This creates separate call/response records and publishes call changes to Supabase Realtime.
 It does not send invitation text or URLs into workspace_messages.
 
-The phone icon starts a group call immediately. Eligible logged-in city-group staff receive
+The group-call option from the chat header's phone button starts a group call. Eligible logged-in members of that chat receive
 an incoming-call card across the entire portal, including dashboards and case details.
 Answer requests microphone access and joins the in-app WebRTC call; Decline dismisses the
 call for that user without preventing other group members from answering. The caller can
@@ -137,6 +137,11 @@ an Enable desktop call notifications button. No closed-browser/mobile push servi
 users must have the portal open and signed in. Background-tab throttling, network loss and
 browser suspension can delay delivery. Calls still require HTTPS/localhost and TURN configuration
 for reliable audio across restrictive networks as described above.
+
+Apply [20261120_workspace_group_calls_all_groups.sql](migrations/20261120_workspace_group_calls_all_groups.sql)
+after the incoming group-call and signaling migrations to enable group calls from company chats
+as well as city chats, including Client accounts. The handset button rings users with access to
+the open chat group, who can answer or decline individually; no one needs to be added one at a time.
 
 ## Direct voice calls across roles
 

@@ -1,15 +1,13 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {Send,RefreshCw,Search,Paperclip,Mic,Square,Phone,PhoneCall,MapPin,X} from 'lucide-react';
+import {Send,RefreshCw,Search,Paperclip,Mic,Square,PhoneCall,MapPin,X} from 'lucide-react';
 import ChatCaseText from './ChatCaseText';
 import {WORKBOOK_SHA,workbookListSelect,workbookKey} from './workbookData';
 import ChatAttachment from './ChatAttachment';
-import {useGroupCalls} from './GroupCallProvider';
 import {supabase} from './supabase';
 import {databaseMessage,mergeMessages,type LiveMessage} from './liveOperations';
 import type {WorkspaceGroup} from './workspaceGroups';
 import type {WorkbookCase,WorkbookProfile} from './workbookData';
 export default function LiveGroupChat({group,onRead,caseContext,profile,onOpenCase,onStartDirectCall}:{onOpenCase?:(item:WorkbookCase)=>void;onStartDirectCall:()=>void;profile:WorkbookProfile;group:WorkspaceGroup;onRead:()=>void;caseContext?:WorkbookCase|null}){
- const {startCall,starting:startingCall}=useGroupCalls();
  const [openingCase,setOpeningCase]=useState(false),[caseMatches,setCaseMatches]=useState<WorkbookCase[]>([]);
  async function openCase(id:string){
   if(!supabase||openingCase)return;setOpeningCase(true);setError('');setCaseMatches([]);
@@ -123,7 +121,7 @@ export default function LiveGroupChat({group,onRead,caseContext,profile,onOpenCa
   if(!alive.current)return;setLoading(false);
   if(result.error)setError(databaseMessage(result.error));else{setMessages(current=>mergeMessages(current,result.data as LiveMessage[]));setOlder(result.data.length===100);}
  }
- return <section className="box live-workspace-group"><div className="chat-thread-header"><div><b>{group.label}</b><small>{connection}</small></div><div className="chat-header-tools"><button aria-label="Search chat" title="Search all messages" onClick={()=>{setSearchOpen(v=>!v);setSearch('');}}><Search size={18}/></button><button aria-label="Start a voice call" title="Voice call a portal user" onClick={onStartDirectCall}><PhoneCall size={18}/></button>{group.kind==='city'&&<button aria-label="Group call" title="Group call" disabled={startingCall} onClick={()=>startCall(group.key)}><Phone size={18}/></button>}<button aria-label="Reload messages" onClick={()=>void load()}><RefreshCw size={16}/></button></div></div>
+ return <section className="box live-workspace-group"><div className="chat-thread-header"><div><b>{group.label}</b><small>{connection}</small></div><div className="chat-header-tools"><button aria-label="Search chat" title="Search all messages" onClick={()=>{setSearchOpen(v=>!v);setSearch('');}}><Search size={18}/></button><button aria-label="Call options" title="Voice call or group call" onClick={onStartDirectCall}><PhoneCall size={18}/></button><button aria-label="Reload messages" onClick={()=>void load()}><RefreshCw size={16}/></button></div></div>
  {searchOpen&&<div className="chat-search"><Search size={16}/><input autoFocus aria-label="Search words or Case ID" placeholder="Search words or Case ID across this chat..." value={search} onChange={e=>setSearch(e.target.value)}/>{searching?<small>Searching...</small>:searchResults&&<small>{searchResults.length}{searchResults.length===100?'+':''} matches</small>}</div>}
  {caseContext&&<p className="live-chat-case-context">Case {caseContext.case_id} - Messages include this case reference.</p>}
  {openingCase&&<p role="status">Opening case...</p>}

@@ -262,7 +262,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
         </div>);
 
   return <GroupCallProvider profile={profile} light={light}>
-    <DirectVoiceCalls profile={profile} open={directCallsOpen} onClose={()=>setDirectCallsOpen(false)}/>
+    <DirectVoiceCalls profile={profile} open={directCallsOpen} groupKey={group?.key} onClose={()=>setDirectCallsOpen(false)}/>
     {locationItem&&<LiveLocationModal item={locationItem} onClose={()=>setLocationItem(null)}/>}
     {reportItem&&<LiveCaseReport item={reportItem} profile={profile} onClose={()=>setReportItem(null)}/>}
     {menuOpen&&<button className="mobile-backdrop" aria-label="Close navigation" onClick={()=>setMenuOpen(false)}/>}

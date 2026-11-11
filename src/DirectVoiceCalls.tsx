@@ -2,15 +2,18 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {Phone,PhoneCall,PhoneOff,X} from 'lucide-react';
 import {supabase} from './supabase';
 import GroupAudioCall from './GroupAudioCall';
+import {useGroupCalls} from './GroupCallProvider';
 import {databaseMessage} from './liveOperations';
 import type {WorkbookProfile} from './workbookData';
 import type {RealtimeChannel} from '@supabase/supabase-js';
 
 type DirectoryUser={id:string;name:string;role:string;city:string|null;company:string|null};
 type DirectCall={id:string;caller_id:string;callee_id:string;caller_name:string;callee_name:string;status:'ringing'|'active'|'ended';ring_until:string;is_caller:boolean};
-export default function DirectVoiceCalls({profile,open,onClose}:{profile:WorkbookProfile;open:boolean;onClose:()=>void}){
- const [directory,setDirectory]=useState<DirectoryUser[]>([]),[calls,setCalls]=useState<DirectCall[]>([]),[loading,setLoading]=useState(false),[starting,setStarting]=useState<string|null>(null),[responding,setResponding]=useState(false),[search,setSearch]=useState(''),[error,setError]=useState(''),[ringtoneEnabled,setRingtoneEnabled]=useState(false);
+export default function DirectVoiceCalls({profile,open,onClose,groupKey}:{profile:WorkbookProfile;open:boolean;onClose:()=>void;groupKey?:string}){
+ const {startCall:startGroupCall,starting:startingGroupCall}=useGroupCalls();
+ const [directory,setDirectory]=useState<DirectoryUser[]>([]),[calls,setCalls]=useState<DirectCall[]>([]),[loading,setLoading]=useState(false),[starting,setStarting]=useState<string|null>(null),[responding,setResponding]=useState(false),[error,setError]=useState(''),[ringtoneEnabled,setRingtoneEnabled]=useState(false);
  const alive=useRef(true),inFlight=useRef(false),channel=useRef<RealtimeChannel|null>(null),ringtoneContext=useRef<AudioContext|null>(null);
+ useEffect(()=>{if(open)setError('');},[open]);
  const refresh=useCallback(async()=>{
   const client=supabase;if(!client||inFlight.current)return;inFlight.current=true;
   try{const result=await client.rpc('workspace_direct_call_state');if(result.error)throw result.error;if(alive.current)setCalls((result.data||[]) as DirectCall[]);}
@@ -69,9 +72,9 @@ export default function DirectVoiceCalls({profile,open,onClose}:{profile:Workboo
   try{const result=await supabase.rpc('workspace_direct_call_action',{p_action:action,p_id:call.id});if(result.error)throw result.error;await refresh();}
   catch(problem){setError(databaseMessage(problem));}finally{if(alive.current)setResponding(false);}
  }
- const visibleDirectory=directory.filter(user=>`${user.name} ${user.role} ${user.city||''} ${user.company||''}`.toLowerCase().includes(search.toLowerCase()));
+ function beginGroupCall(){if(!groupKey)return;startGroupCall(groupKey);onClose();}
  return <>
-  {open&&<div className="direct-call-directory-scrim"><section className="box direct-call-directory" role="dialog" aria-modal="true" aria-labelledby="direct-call-title"><header><div><h2 id="direct-call-title">Voice calls</h2><p>Call any portal user. Calls are audio only; private chats are not available.</p></div><button aria-label="Close voice calls" onClick={onClose}><X size={18}/></button></header><label className="direct-call-search">Find a person<input type="search" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search name, role, city, or company"/></label>{error&&<p className="workbook-error" role="alert">{error}</p>}{loading?<p>Loading portal users…</p>:<div className="direct-call-directory-list">{visibleDirectory.map(user=><article key={user.id}><div><b>{user.name}</b><small>{user.role}{user.city?` · ${user.city}`:''}{user.company?` · ${user.company}`:''}</small></div><button className="primary" disabled={starting!==null} onClick={()=>void beginCall(user)}><Phone size={16}/>{starting===user.id?'Calling…':'Call'}</button></article>)}{!visibleDirectory.length&&<p>No other users found.</p>}</div>}</section></div>}
+  {open&&<div className="direct-call-directory-scrim"><section className="box direct-call-directory" role="dialog" aria-modal="true" aria-labelledby="direct-call-title"><header><h2 id="direct-call-title">Calls</h2><button className="direct-call-close" aria-label="Close calls" onClick={onClose}><X size={18}/></button></header><div className="direct-call-modes" aria-label="Call type"><button type="button" className="selected"><Phone size={16}/>Voice call</button><button type="button" disabled={!groupKey||startingGroupCall} onClick={beginGroupCall}><PhoneCall size={16}/>{startingGroupCall?'Starting…':'Group call'}</button></div>{error&&<p className="workbook-error" role="alert">{error}</p>}{loading?<p>Loading portal users…</p>:<div className="direct-call-directory-list">{directory.map(user=><article key={user.id}><div><b>{user.name}</b><small>{user.role}{user.city?` · ${user.city}`:''}{user.company?` · ${user.company}`:''}</small></div><button className="primary" disabled={starting!==null} onClick={()=>void beginCall(user)}><Phone size={16}/>{starting===user.id?'Calling…':'Call'}</button></article>)}{!directory.length&&!loading&&<p>No other users found.</p>}</div>}</section></div>}
   {incoming&&<section className="direct-incoming-call" role="alertdialog" aria-label="Incoming voice call"><span className="incoming-call-icon"><PhoneCall size={28}/></span><h2>Incoming voice call</h2><p><strong>{incoming.caller_name}</strong> is calling you</p><div><button className="call-decline" disabled={responding} onClick={()=>void respond('decline',incoming)}><PhoneOff size={17}/>Decline</button><button className="call-answer" disabled={responding||!!activeCall||!!outgoing} onClick={()=>void respond('answer',incoming)}><Phone size={17}/>Answer</button></div>{!ringtoneEnabled&&<button className="call-notification-optin" onClick={unlockRingtone}>Enable call sounds</button>}</section>}
   {audioCall&&<div className="direct-active-call"><p>{audioCall.is_caller&&audioCall.status==='ringing'?'Calling':'Voice call'} · {audioCall.is_caller?audioCall.callee_name:audioCall.caller_name}</p><GroupAudioCall key={audioCall.id} room={audioCall.id} group="direct" topic={`direct-call:${audioCall.id}`} title="Private voice call" name={profile.name} onLeave={()=>void respond('end',audioCall)}/></div>}
  </>;

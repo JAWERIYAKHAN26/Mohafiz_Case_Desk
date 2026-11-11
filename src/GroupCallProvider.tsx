@@ -10,7 +10,7 @@ export const useGroupCalls=()=>useContext(Calls);
 export default function GroupCallProvider({children,profile,light=true}:{children:ReactNode;profile:WorkbookProfile;light?:boolean}){
  const [calls,setCalls]=useState<Call[]>([]),[active,setActive]=useState<Call|null>(null),[error,setError]=useState(''),[starting,setStarting]=useState(false),[responding,setResponding]=useState(false),[ringtoneEnabled,setRingtoneEnabled]=useState(false);
  const alive=useRef(true),current=useRef<Call|null>(null),inFlight=useRef(false),notified=useRef(new Set<string>()),dismissed=useRef(new Set<string>()),ringtoneContext=useRef<AudioContext|null>(null);current.current=active;
- const eligible=['CRO','CRO Manager','SFSO','SOM','FSO'].includes(profile.role);
+ const eligible=['CRO','CRO Manager','SFSO','SOM','FSO','Client'].includes(profile.role);
  const refresh=useCallback(async()=>{
   if(!supabase||!eligible||inFlight.current)return;inFlight.current=true;
   try{const r=await supabase.rpc('workspace_call_state');if(r.error)throw r.error;if(!alive.current)return;const next=(r.data||[]) as Call[];setCalls(next);

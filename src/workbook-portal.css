@@ -263,10 +263,18 @@
 .call-ui-root button,.call-ui-root section,.call-ui-root .call-notice { pointer-events:auto; }
 .direct-call-directory-scrim { position:fixed; z-index:1190; inset:0; display:grid; place-items:center; padding:20px; background:#102b32a8; }
 .direct-call-directory { width:min(600px,calc(100vw - 32px)); max-height:min(80vh,720px); overflow:hidden; display:flex; flex-direction:column; gap:14px; padding:22px; }
-.direct-call-directory > header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
-.direct-call-directory h2 { margin:0 0 5px; }.direct-call-directory header p { margin:0; color:var(--muted); }
-.direct-call-search { display:grid; gap:6px; }.direct-call-search input { width:100%; }
-.direct-call-directory-list { overflow:auto; display:grid; gap:8px; }
+.direct-call-directory > header { display:flex; align-items:center; justify-content:space-between; gap:16px; border:0; padding:0; }
+.direct-call-directory h2 { margin:0; }
+.direct-call-modes { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:4px; border:1px solid var(--border); border-radius:10px; background:var(--background); }
+.direct-call-modes button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:40px; border:0; background:transparent; }
+.direct-call-modes button.selected { color:var(--accent-contrast,#fff); background:var(--accent); border-radius:7px; }
+.direct-call-directory .direct-call-close { display:inline-flex; align-items:center; justify-content:center; min-width:30px; min-height:30px; padding:4px; border:0; border-radius:50%; background:transparent; box-shadow:none; color:var(--text); }
+.direct-call-directory .direct-call-close:hover { background:var(--background); }
+.direct-call-directory-list { overflow:auto; display:grid; gap:8px; scrollbar-width:none; -ms-overflow-style:none; }
+.direct-call-directory-list::-webkit-scrollbar { display:none; width:0; height:0; }
+.direct-group-call { display:grid; justify-items:start; gap:12px; padding:14px; border:1px solid var(--border); border-radius:10px; background:var(--card); }
+.direct-group-call p { margin:0; color:var(--muted); }
+.direct-group-call button { display:inline-flex; align-items:center; gap:8px; }
 .direct-call-directory-list article { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px; border:1px solid var(--border); border-radius:8px; background:var(--card); }
 .direct-call-directory-list article > div { min-width:0; display:grid; gap:4px; }.direct-call-directory-list small { color:var(--muted); overflow-wrap:anywhere; }
 .direct-call-directory-list button,.direct-incoming-call button { display:inline-flex; align-items:center; justify-content:center; gap:7px; }

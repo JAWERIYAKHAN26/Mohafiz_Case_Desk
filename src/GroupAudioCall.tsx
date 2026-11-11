@@ -5,7 +5,7 @@ import {databaseMessage} from './liveOperations';
 import type {RealtimeChannel} from '@supabase/supabase-js';
 type Peer={pc:RTCPeerConnection;audio:HTMLAudioElement;ice:RTCIceCandidateInit[]};
 type Signal={from:string;to:string;description?:RTCSessionDescriptionInit;candidate?:RTCIceCandidateInit};
-export default function GroupAudioCall({room,group,name,onLeave}:{room:string;group:string;name:string;onLeave:()=>void}){
+export default function GroupAudioCall({room,group,name,onLeave,topic,title='Internal group audio call'}:{room:string;group:string;name:string;onLeave:()=>void;topic?:string;title?:string}){
  const [status,setStatus]=useState('Requesting microphone...'),[error,setError]=useState(''),[muted,setMuted]=useState(false),[participants,setParticipants]=useState<string[]>([]);
  const stream=useRef<MediaStream|null>(null),peers=useRef(new Map<string,Peer>()),channel=useRef<RealtimeChannel|null>(null),me=useRef(crypto.randomUUID());
  useEffect(()=>{
@@ -29,7 +29,7 @@ export default function GroupAudioCall({room,group,name,onLeave}:{room:string;gr
     if(!supabase||!navigator.mediaDevices?.getUserMedia)throw new Error('Calls require microphone support on HTTPS or localhost.');
     const media=await navigator.mediaDevices.getUserMedia({audio:true});if(closed){media.getTracks().forEach(t=>t.stop());return;}stream.current=media;
     await supabase.realtime.setAuth();if(closed){media.getTracks().forEach(t=>t.stop());return;}
-    const ch=supabase.channel(`call:${group}:${room}`,{config:{private:true,broadcast:{self:false},presence:{key:self}}});channel.current=ch;
+    const ch=supabase.channel(topic||`call:${group}:${room}`,{config:{private:true,broadcast:{self:false},presence:{key:self}}});channel.current=ch;
     ch.on('broadcast',{event:'signal'},({payload})=>{void(async()=>{
      const s=payload as Signal;if(closed||s.to!==self||s.from===self||!s.from)return;
      try{const p=peer(s.from);if(s.description){await p.pc.setRemoteDescription(s.description);for(const ice of p.ice)await p.pc.addIceCandidate(ice);p.ice=[];if(s.description.type==='offer'){const answer=await p.pc.createAnswer();await p.pc.setLocalDescription(answer);await send(s.from,{description:answer});}}
@@ -46,6 +46,6 @@ export default function GroupAudioCall({room,group,name,onLeave}:{room:string;gr
   }
   void start();
   return()=>{closed=true;stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;for(const id of peerMap.keys())remove(id);const ch=channel.current;if(ch){void ch.untrack();void supabase?.removeChannel(ch);}channel.current=null;};
- },[room,group,name]);
- return <section className="chat-call-panel" aria-label="Group audio call"><b>Internal group audio call</b><p role="status">{status} ? {participants.length} participant{participants.length===1?'':'s'}</p><p>{participants.join(', ')}</p>{error&&<p role="alert">{error}</p>}<div className="live-case-action-buttons"><button onClick={()=>{stream.current?.getAudioTracks().forEach(t=>{t.enabled=muted;});setMuted(v=>!v);}}>{muted?<MicOff size={16}/>:<Mic size={16}/>} {muted?'Unmute':'Mute'}</button><button onClick={()=>{for(const p of peers.current.values())void p.audio.play().catch(()=>setError('Audio playback is blocked by the browser.'));}}>Enable audio</button><button onClick={onLeave}><PhoneOff size={16}/>Leave call</button></div></section>;
+ },[room,group,name,topic]);
+ return <section className="chat-call-panel" aria-label="Group audio call"><b>{title}</b><p role="status">{status} · {participants.length} participant{participants.length===1?'':'s'}</p><p>{participants.join(', ')}</p>{error&&<p role="alert">{error}</p>}<div className="live-case-action-buttons"><button onClick={()=>{stream.current?.getAudioTracks().forEach(t=>{t.enabled=muted;});setMuted(v=>!v);}}>{muted?<MicOff size={16}/>:<Mic size={16}/>} {muted?'Unmute':'Mute'}</button><button onClick={()=>{for(const p of peers.current.values())void p.audio.play().catch(()=>setError('Audio playback is blocked by the browser.'));}}>Enable audio</button><button onClick={onLeave}><PhoneOff size={16}/>Leave call</button></div></section>;
 }

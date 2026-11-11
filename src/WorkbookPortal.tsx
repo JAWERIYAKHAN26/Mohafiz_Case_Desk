@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, BriefcaseBusiness, FileText, Settings, Bell, ChartNoAxesCombined, RefreshCw, LogOut, UserRound, ChevronLeft, ChevronRight, MapPin, Menu, X, Search, Columns3, MessagesSquare, MessageSquareLock } from 'lucide-react';
+import { LayoutDashboard, BriefcaseBusiness, FileText, Settings, Bell, ChartNoAxesCombined, RefreshCw, LogOut, UserRound, ChevronLeft, ChevronRight, MapPin, Menu, X, Search, Columns3, MessagesSquare, MessageSquareLock, PhoneCall } from 'lucide-react';
 import { supabase } from './supabase';
 import { WORKBOOK_SHA, WORKBOOK_PAGE_SIZE, workbookSelect, workbookListSelect, workbookKey, sourceText, workbookPageCsv, caseAgeLabel, type WorkbookCase, type WorkbookProfile, type WorkbookSummary } from './workbookData';
 import './workbook-portal.css';
 import LiveFsoWorkspace from './LiveFsoWorkspace';
 import { workspaceGroups } from './workspaceGroups';
 import GroupCallProvider from './GroupCallProvider';
+import DirectVoiceCalls from './DirectVoiceCalls';
 import LiveGroupChat from './LiveGroupChat';
 import CaseDetail from './LiveCaseDetail';
 import LiveCaseReport from './LiveCaseReport';
@@ -97,7 +98,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
   },[counterRevision,revision,counters]);
   useEffect(()=>{
     if(!supabase)return;
-    const label=page==='dashboard'?'Dashboard':page==='new'?'New Cases':page==='cases'?'Case Board':page==='reports'?'Reports':page==='intake'?'Raise a Case':workspaceGroups(profile).find(item=>item.key===page)?.label||page;
+    const label=page==='dashboard'?'Dashboard':page==='new'?'New Cases':page==='cases'?'Case Board':page==='reports'?'Reports':page==='intake'?'Raise a Case':page==='voice-calls'?'Voice Calls':workspaceGroups(profile).find(item=>item.key===page)?.label||page;
     const entry:Activity={id:crypto.randomUUID(),action:'Opened '+label,actor_name:profile.name,source_sheet:'',source_row:0,created_at:new Date().toISOString()};
     void supabase.rpc('portal_record_visit',{p_page:page}).then(result=>{
       if(result.error)setVisits(current=>[entry,...current].slice(0,6));
@@ -181,7 +182,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
     return()=>{alive=false;};
   },[revision,profile.email,profile.role]);
   useEffect(()=>{
-    if(page==='audit'||page==='dashboard'||page.startsWith('group:')||page==='updates'||page==='intake'){setLoading(false);return;}
+      if(page==='audit'||page==='dashboard'||page==='voice-calls'||page.startsWith('group:')||page==='updates'||page==='intake'){setLoading(false);return;}
     let alive=true;const controller=new AbortController();setLoading(true);setError('');setRows([]);
     const timer=window.setTimeout(()=>{
       void(async()=>{
@@ -229,8 +230,8 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
   const groups=workspaceGroups(profile);
   const group=groups.find(item=>item.key===page);
   const internalUnreadCount=groups.filter(item=>item.kind==='city').reduce((sum,item)=>sum+(unread[item.key]||0),0);
-  const nav=[...primaryNav,...(profile.role==='CRO Manager'?[['audit','Audit Logs',FileText] as const]:[]),...groups.map(item=>[item.key,item.label,item.kind==='city'?MessageSquareLock:MessagesSquare] as const),...reportsNav];
-  const mobileNav=profile.role==='FSO'?nav.slice(0,2):nav.slice(0,4);
+  const nav=[...primaryNav,...(profile.role==='CRO Manager'?[['audit','Audit Logs',FileText] as const]:[]),...groups.map(item=>[item.key,item.label,item.kind==='city'?MessageSquareLock:MessagesSquare] as const),['voice-calls','Voice Calls',PhoneCall] as const,...reportsNav];
+  const mobileNav=profile.role==='FSO'?[...nav.slice(0,2),nav.find(item=>item[0]==='voice-calls')!]:[...nav.slice(0,3),nav.find(item=>item[0]==='voice-calls')!];
   const showBoard=page==='cases'&&!['FSO','Client'].includes(profile.role);
   const cities=filters.city?[filters.city]:options.cities.length?options.cities:[...new Set(rows.map(item=>sourceText(item.city)))];
   const title=page==='intake'?'Raise a Case':selected?`Case ${sourceText(selected.case_id)}`:(page==='updates'?'Updates to review':page==='new'?'New Cases':nav.find(item=>item[0]===page)?.[1])||'Cases';
@@ -260,6 +261,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
         </div>);
 
   return <GroupCallProvider profile={profile} light={light}>
+    <DirectVoiceCalls profile={profile} open={page==='voice-calls'} onClose={()=>navigate(['CRO','CRO Manager'].includes(profile.role)?'dashboard':'cases')}/>
     {locationItem&&<LiveLocationModal item={locationItem} onClose={()=>setLocationItem(null)}/>}
     {reportItem&&<LiveCaseReport item={reportItem} profile={profile} onClose={()=>setReportItem(null)}/>}
     {menuOpen&&<button className="mobile-backdrop" aria-label="Close navigation" onClick={()=>setMenuOpen(false)}/>}
@@ -282,7 +284,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
       </details></div>
     </div>
       {notice&&<div className="box live-notice" role="status">{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={14}/></button></div>}{setupError&&<div className="workbook-error" role="alert">{setupError}</div>}{counterError&&<div className="workbook-error" role="alert">Workflow/chat setup: {counterError}</div>}
-      {page==='audit'&&profile.role==='CRO Manager'?<LiveAuditLogs revision={revision}/>:page==='intake'&&profile.role==='Client'?<LiveCaseIntake profile={profile} companies={options.companies} cities={options.cities} onCancel={()=>navigate('cases')} onCreated={id=>{setNotice(`Case ${id} raised and forwarded to your SFSO team for acknowledgement.`);setFilters(emptyFilters);setPageNumber(0);setRevision(value=>value+1);navigate(profile.role==='Client'?'cases':'new');}}/>:selected?<CaseDetail key={workbookKey(selected)} item={selected} profile={profile} onChange={()=>{setCounterRevision(value=>value+1);setRevision(value=>value+1);}} onBack={()=>setSelected(null)} onConversation={item=>{
+      {page==='audit'&&profile.role==='CRO Manager'?<LiveAuditLogs revision={revision}/>:page==='voice-calls'?<section className="box"><h2>Voice calls</h2><p>Choose a person from the voice call directory to start an audio call. Private chat is not enabled.</p></section>:page==='intake'&&profile.role==='Client'?<LiveCaseIntake profile={profile} companies={options.companies} cities={options.cities} onCancel={()=>navigate('cases')} onCreated={id=>{setNotice(`Case ${id} raised and forwarded to your SFSO team for acknowledgement.`);setFilters(emptyFilters);setPageNumber(0);setRevision(value=>value+1);navigate(profile.role==='Client'?'cases':'new');}}/>:selected?<CaseDetail key={workbookKey(selected)} item={selected} profile={profile} onChange={()=>{setCounterRevision(value=>value+1);setRevision(value=>value+1);}} onBack={()=>setSelected(null)} onConversation={item=>{
         const target=groups.find(group=>profile.role==='FSO'?group.kind==='city'&&group.value===(item.city==='Rawalpindi'?'Islamabad':item.city):group.kind==='company'&&group.value===item.company)||groups.find(group=>group.kind==='city'&&group.value===(item.city==='Rawalpindi'?'Islamabad':item.city));
         if(target){navigate(target.key);setConversationCase(item);}else setNotice('No conversation group is configured for this case.');
       }}/>:page==='updates'?<section className="box"><h2>Updates to review</h2><button onClick={()=>{setFilters({...emptyFilters,status:'__review__'});setPageNumber(0);navigate('cases',true);}}>Field findings awaiting review ({counters?.reports_to_review??0})</button><h3>Group messages ({counters?.unread_messages??0} unread)</h3><div className="live-case-action-buttons">{groups.map(item=><button key={item.key} onClick={()=>navigate(item.key,true)}>{item.label}</button>)}</div></section>:group?<LiveGroupChat key={group.key} onOpenCase={setSelected} profile={profile} group={group} caseContext={conversationCase} onRead={()=>setCounterRevision(value=>value+1)}/>:<>

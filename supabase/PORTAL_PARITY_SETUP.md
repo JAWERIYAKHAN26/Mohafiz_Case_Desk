@@ -44,6 +44,11 @@ calculations remain intact; the statement timeout is not increased.
 The SQL Editor must use a schema administrator. REST service-role credentials cannot install
 this migration. Running only REFRESH_API_SCHEMA_CACHE.sql will not apply the repair.
 
+If `workflow_counters` still returns 57014 after this repair, apply
+[20261118_workflow_chat_counter_performance.sql](migrations/20261118_workflow_chat_counter_performance.sql)
+after the workflow/chat tables exist. It limits unread-message counting to the caller's permitted
+groups and indexes that lookup. Run it in the same Supabase project used by the portal.
+
 Validation: `node scripts/admin/validate-desk-workspace.mjs` runs an isolated PostgreSQL/WASM
 instance, including 30,000 additional cases and all four dashboard/list RPCs as CRO, Client,
 FSO and SFSO. These local timings do not predict production latency. After deployment, verify
@@ -109,8 +114,13 @@ and physical GPS accuracy still require deployment/device verification.
 
 ## Incoming calls without chat invitations
 
-Apply [20261112_incoming_group_calls.sql](migrations/20261112_incoming_group_calls.sql) after
-20261111, then deploy the updated frontend. SQL Editor label: Enable Incoming Group Calls.
+For calling, apply these migrations in order after `20261111_field_chat_updates.sql`:
+
+1. [20261112_group_call_invites.sql](migrations/20261112_group_call_invites.sql) installs the private Realtime signaling policies used by WebRTC.
+2. [20261112_incoming_group_calls.sql](migrations/20261112_incoming_group_calls.sql) installs call records, access-checked call RPCs, and call-change notifications. SQL Editor label: Enable Incoming Group Calls.
+3. [20261113_portal_call_roles.sql](migrations/20261113_portal_call_roles.sql) refreshes those policies and enables the portal's scoped company topics; apply it if your deployment uses that migration in its standard bundle.
+
+Then deploy the updated frontend. Running only the incoming-call migration is insufficient for private WebRTC signaling unless the group-call policy migration is already installed.
 This creates separate call/response records and publishes call changes to Supabase Realtime.
 It does not send invitation text or URLs into workspace_messages.
 
@@ -127,6 +137,18 @@ an Enable desktop call notifications button. No closed-browser/mobile push servi
 users must have the portal open and signed in. Background-tab throttling, network loss and
 browser suspension can delay delivery. Calls still require HTTPS/localhost and TURN configuration
 for reliable audio across restrictive networks as described above.
+
+## Direct voice calls across roles
+
+Apply [20261117_direct_voice_calls.sql](migrations/20261117_direct_voice_calls.sql) after
+`20261112_incoming_group_calls.sql`, then deploy the updated frontend. All signed-in Client,
+FSO, SFSO, SOM, CRO and CRO Manager accounts can find and call another active portal account,
+regardless of company or city. The directory shows display name, role, city and company, but
+does not expose email addresses. Calls are one-to-one audio only; they do not create private
+chat messages or record audio. Call metadata is retained to manage ringing and active calls.
+Both users need the portal open and microphone access.
+This migration adds participant-only call records and private Realtime signaling policies;
+do not replace them with broad Realtime access policies.
 
 Validation adds database checks for call scope, answer/decline/end, and no invitation messages.
 The browser regression test rings a second user on the Case Details screen, answers/declines,

@@ -8,8 +8,8 @@ type Call={id:string;group_key:string;caller_name:string;status:string;ring_unti
 const Calls=createContext<{startCall:(group:string)=>void;starting:boolean}>({startCall:()=>{},starting:false});
 export const useGroupCalls=()=>useContext(Calls);
 export default function GroupCallProvider({children,profile,light=true}:{children:ReactNode;profile:WorkbookProfile;light?:boolean}){
- const [calls,setCalls]=useState<Call[]>([]),[active,setActive]=useState<Call|null>(null),[error,setError]=useState(''),[starting,setStarting]=useState(false),[responding,setResponding]=useState(false);
- const alive=useRef(true),current=useRef<Call|null>(null),inFlight=useRef(false),notified=useRef(new Set<string>()),dismissed=useRef(new Set<string>());current.current=active;
+ const [calls,setCalls]=useState<Call[]>([]),[active,setActive]=useState<Call|null>(null),[error,setError]=useState(''),[starting,setStarting]=useState(false),[responding,setResponding]=useState(false),[ringtoneEnabled,setRingtoneEnabled]=useState(false);
+ const alive=useRef(true),current=useRef<Call|null>(null),inFlight=useRef(false),notified=useRef(new Set<string>()),dismissed=useRef(new Set<string>()),ringtoneContext=useRef<AudioContext|null>(null);current.current=active;
  const eligible=['CRO','CRO Manager','SFSO','SOM','FSO'].includes(profile.role);
  const refresh=useCallback(async()=>{
   if(!supabase||!eligible||inFlight.current)return;inFlight.current=true;
@@ -25,6 +25,30 @@ export default function GroupCallProvider({children,profile,light=true}:{childre
  },[eligible,refresh]);
  useEffect(()=>{if(!active?.is_caller)return;const timer=window.setInterval(()=>{void supabase?.rpc('workspace_call_action',{p_action:'heartbeat',p_id:active.id}).then(r=>{if(r.error&&alive.current)setError(databaseMessage(r.error));});},10000);return()=>window.clearInterval(timer);},[active?.id,active?.is_caller]);
  const incoming=calls.find(c=>!c.is_caller&&c.my_response!=='accepted'&&c.my_response!=='declined'&&!dismissed.current.has(c.id)&&Date.parse(c.ring_until)>Date.now());
+ function unlockRingtone(){
+  if(!('AudioContext' in window))return;
+  const ctx=ringtoneContext.current??(ringtoneContext.current=new AudioContext());
+  void ctx.resume().then(()=>setRingtoneEnabled(ctx.state==='running')).catch(()=>setRingtoneEnabled(false));
+ }
+ useEffect(()=>{
+  window.addEventListener('pointerdown',unlockRingtone);window.addEventListener('keydown',unlockRingtone);
+  return()=>{window.removeEventListener('pointerdown',unlockRingtone);window.removeEventListener('keydown',unlockRingtone);if(ringtoneContext.current){void ringtoneContext.current.close();ringtoneContext.current=null;}};
+ },[]);
+ useEffect(()=>{
+  if(!incoming)return;
+  if(!('AudioContext' in window))return;
+  const ctx=ringtoneContext.current??(ringtoneContext.current=new AudioContext()),tones=new Set<OscillatorNode>();let stopped=false;
+  const ring=()=>{
+   if(stopped||!ctx||ctx.state!=='running')return;
+   const now=ctx.currentTime,osc=ctx.createOscillator(),gain=ctx.createGain();
+   osc.type='sine';osc.frequency.setValueAtTime(440,now);osc.frequency.setValueAtTime(480,now+0.48);
+   gain.gain.setValueAtTime(0.0001,now);gain.gain.linearRampToValueAtTime(0.12,now+0.04);gain.gain.setValueAtTime(0.12,now+0.24);gain.gain.linearRampToValueAtTime(0.0001,now+0.34);
+   gain.gain.setValueAtTime(0.0001,now+0.5);gain.gain.linearRampToValueAtTime(0.12,now+0.54);gain.gain.setValueAtTime(0.12,now+0.74);gain.gain.linearRampToValueAtTime(0.0001,now+0.84);
+   osc.connect(gain);gain.connect(ctx.destination);tones.add(osc);osc.onended=()=>tones.delete(osc);osc.start(now);osc.stop(now+0.9);
+  };
+  ring();const timer=window.setInterval(ring,1900);
+  return()=>{stopped=true;window.clearInterval(timer);for(const tone of tones){try{tone.stop();}catch{}}tones.clear();};
+ },[incoming?.id]);
  useEffect(()=>{
   if(!incoming||notified.current.has(incoming.id))return;notified.current.add(incoming.id);
   if('Notification' in window&&Notification.permission==='granted'){const n=new Notification('Incoming Mohafiz group call',{body:incoming.caller_name+' is calling '+incoming.group_key.split(':').at(-1),tag:incoming.id});n.onclick=()=>{window.focus();n.close();};const t=window.setTimeout(()=>n.close(),45000);return()=>{window.clearTimeout(t);n.close();};}
@@ -41,7 +65,7 @@ export default function GroupCallProvider({children,profile,light=true}:{childre
  async function leave(){const c=current.current;if(!c||!supabase)return;setActive(null);dismissed.current.add(c.id);const r=await supabase.rpc('workspace_call_action',{p_action:c.is_caller?'end':'decline',p_id:c.id});if(r.error&&alive.current)setError(databaseMessage(r.error));}
  return <Calls.Provider value={{startCall:group=>void startCall(group),starting}}>{children}<div className={'desk '+(light?'light ':'')+'call-ui-root'}>
  {error&&<div className="call-notice" role="alert">{error}<button aria-label="Dismiss call notice" onClick={()=>setError('')}><X size={16}/></button></div>}
- {incoming&&<section className="incoming-call-card" role="alertdialog" aria-modal="false" aria-label="Incoming group call"><span className="incoming-call-icon"><Phone size={30}/></span><h2>Incoming group call</h2><p><strong>{incoming.caller_name}</strong> is calling</p><p>Mohafiz X {incoming.group_key.split(':').at(-1)}</p>{active&&<p>You are already in another call.</p>}<div className="incoming-call-actions"><button className="call-decline" disabled={responding} onClick={()=>void respond(incoming,false)}><PhoneOff size={18}/>Decline</button><button className="call-answer" disabled={responding||!!active} onClick={()=>void respond(incoming,true)}><Phone size={18}/>Answer</button></div>{'Notification' in window&&Notification.permission==='default'&&<button className="call-notification-optin" onClick={()=>void Notification.requestPermission()}>Enable desktop call notifications</button>}</section>}
+ {incoming&&<section className="incoming-call-card" role="alertdialog" aria-modal="false" aria-label="Incoming group call"><span className="incoming-call-icon"><Phone size={30}/></span><h2>Incoming group call</h2><p><strong>{incoming.caller_name}</strong> is calling</p><p>Mohafiz X {incoming.group_key.split(':').at(-1)}</p>{active&&<p>You are already in another call.</p>}<div className="incoming-call-actions"><button className="call-decline" disabled={responding} onClick={()=>void respond(incoming,false)}><PhoneOff size={18}/>Decline</button><button className="call-answer" disabled={responding||!!active} onClick={()=>void respond(incoming,true)}><Phone size={18}/>Answer</button></div>{!ringtoneEnabled&&<button className="call-notification-optin" onClick={unlockRingtone}>Enable call sounds</button>}{'Notification' in window&&Notification.permission==='default'&&<button className="call-notification-optin" onClick={()=>void Notification.requestPermission()}>Enable desktop call notifications</button>}</section>}
  {active&&<div className="active-call-window"><p className="active-call-heading">{active.is_caller&&active.status==='ringing'?'Calling group...':'Group call'} - {active.group_key.split(':').at(-1)}</p><GroupAudioCall key={active.id} room={active.id} group={active.group_key} name={profile.name} onLeave={()=>void leave()}/></div>}
  </div></Calls.Provider>;
 }

@@ -12,19 +12,19 @@ export default function DirectVoiceCalls({profile,open,onClose}:{profile:Workboo
  const [directory,setDirectory]=useState<DirectoryUser[]>([]),[calls,setCalls]=useState<DirectCall[]>([]),[loading,setLoading]=useState(false),[starting,setStarting]=useState<string|null>(null),[responding,setResponding]=useState(false),[search,setSearch]=useState(''),[error,setError]=useState(''),[ringtoneEnabled,setRingtoneEnabled]=useState(false);
  const alive=useRef(true),inFlight=useRef(false),channel=useRef<RealtimeChannel|null>(null),ringtoneContext=useRef<AudioContext|null>(null);
  const refresh=useCallback(async()=>{
-  if(!supabase||inFlight.current)return;inFlight.current=true;
-  try{const result=await supabase.rpc('workspace_direct_call_state');if(result.error)throw result.error;if(alive.current)setCalls((result.data||[]) as DirectCall[]);}
+  const client=supabase;if(!client||inFlight.current)return;inFlight.current=true;
+  try{const result=await client.rpc('workspace_direct_call_state');if(result.error)throw result.error;if(alive.current)setCalls((result.data||[]) as DirectCall[]);}
   catch(problem){if(alive.current)setError(databaseMessage(problem));}finally{inFlight.current=false;}
  },[]);
  useEffect(()=>{
-  alive.current=true;if(!supabase)return;void refresh();
-  const realtime=supabase.channel('direct-voice-calls-'+crypto.randomUUID()).on('postgres_changes',{event:'*',schema:'public',table:'workspace_direct_calls'},()=>void refresh()).subscribe();channel.current=realtime;
+  alive.current=true;const client=supabase;if(!client)return;void refresh();
+  const realtime=client.channel('direct-voice-calls-'+crypto.randomUUID()).on('postgres_changes',{event:'*',schema:'public',table:'workspace_direct_calls'},()=>void refresh()).subscribe();channel.current=realtime;
   const timer=window.setInterval(()=>void refresh(),3000);
-  return()=>{alive.current=false;window.clearInterval(timer);void supabase.removeChannel(realtime);channel.current=null;};
+  return()=>{alive.current=false;window.clearInterval(timer);void client.removeChannel(realtime);channel.current=null;};
  },[refresh,profile.email]);
  useEffect(()=>{
-  if(!open||!supabase)return;let active=true;setLoading(true);setError('');
-  void supabase.rpc('workspace_call_directory').then(result=>{if(!active)return;if(result.error)setError(databaseMessage(result.error));else setDirectory((result.data||[]) as DirectoryUser[]);}).finally(()=>{if(active)setLoading(false);});
+  const client=supabase;if(!open||!client)return;let active=true;setLoading(true);setError('');
+  void (async()=>{try{const result=await client.rpc('workspace_call_directory');if(!active)return;if(result.error)setError(databaseMessage(result.error));else setDirectory((result.data||[]) as DirectoryUser[]);}catch(problem){if(active)setError(databaseMessage(problem));}finally{if(active)setLoading(false);}})();
   return()=>{active=false;};
  },[open,profile.email]);
  const outgoing=calls.find(call=>call.is_caller&&call.status==='ringing');
@@ -55,8 +55,8 @@ export default function DirectVoiceCalls({profile,open,onClose}:{profile:Workboo
   return()=>{stopped=true;window.clearInterval(timer);for(const tone of tones){try{tone.stop();}catch{}}tones.clear();};
  },[incoming?.id]);
  useEffect(()=>{
-  if(!audioCall?.is_caller||!supabase)return;
-  const timer=window.setInterval(()=>{void supabase.rpc('workspace_direct_call_action',{p_action:'heartbeat',p_id:audioCall.id}).then(result=>{if(result.error&&alive.current)setError(databaseMessage(result.error));});},10000);
+  const client=supabase;if(!audioCall?.is_caller||!client)return;
+  const timer=window.setInterval(()=>{void client.rpc('workspace_direct_call_action',{p_action:'heartbeat',p_id:audioCall.id}).then(result=>{if(result.error&&alive.current)setError(databaseMessage(result.error));});},10000);
   return()=>window.clearInterval(timer);
  },[audioCall?.id,audioCall?.is_caller]);
  async function beginCall(user:DirectoryUser){

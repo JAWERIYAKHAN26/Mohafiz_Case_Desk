@@ -18,15 +18,20 @@ export default function LiveGroupChat({group,onRead,caseContext,profile,onOpenCa
    const matches=(result.data||[]) as WorkbookCase[];if(matches.length===1)onOpenCase?.(matches[0]);else if(matches.length>1)setCaseMatches(matches);else setError('This case is unavailable or outside your assigned access.');
   }catch(e){if(alive.current)setError(databaseMessage(e));}finally{if(alive.current)setOpeningCase(false);}
  }
- const [messages,setMessages]=useState<LiveMessage[]>([]),[draft,setDraft]=useState(''),[error,setError]=useState(''),[connection,setConnection]=useState('Connecting'),[loading,setLoading]=useState(true),[sending,setSending]=useState(false),[older,setOlder]=useState(true);
+ const [messages,setMessages]=useState<LiveMessage[]>([]),[senderId,setSenderId]=useState(''),[draft,setDraft]=useState(''),[error,setError]=useState(''),[connection,setConnection]=useState('Connecting'),[loading,setLoading]=useState(true),[sending,setSending]=useState(false),[older,setOlder]=useState(true);
  const [search,setSearch]=useState(''),[searchOpen,setSearchOpen]=useState(false),[searchResults,setSearchResults]=useState<LiveMessage[]|null>(null),[searching,setSearching]=useState(false);
- const [files,setFiles]=useState<File[]>([]),[recording,setRecording]=useState(false),[sharing,setSharing]=useState(false),[callOpen,setCallOpen]=useState(false),[callRoom,setCallRoom]=useState<string|null>(null);
+ const [files,setFiles]=useState<File[]>([]),[recording,setRecording]=useState(false),[sharing,setSharing]=useState(false),[callOpen,setCallOpen]=useState(false),[callRoom,setCallRoom]=useState<string|null>(null),[callGroupKey,setCallGroupKey]=useState(group.key),[calling,setCalling]=useState(false),[callTarget,setCallTarget]=useState('group');
  const fileInput=useRef<HTMLInputElement>(null),recorder=useRef<MediaRecorder|null>(null),stream=useRef<MediaStream|null>(null),recordTimer=useRef<number|undefined>(undefined);
  const locationWatch=useRef<number|null>(null),locationId=useRef<string|null>(null),locationExpiry=useRef(''),locationTimer=useRef<number|undefined>(undefined);
  const locationBusy=useRef(false),locationSession=useRef(0);
  const stopResources=useRef(()=>{});
  stopResources.current=()=>{if(recorder.current?.state==='recording')recorder.current.stop();stream.current?.getTracks().forEach(t=>t.stop());window.clearTimeout(recordTimer.current);void stopLocation();};
  useEffect(()=>()=>stopResources.current(),[]);
+ useEffect(()=>{
+  let active=true;
+  void supabase?.auth.getSession().then(({data,error:sessionError})=>{if(active&&!sessionError)setSenderId(data.session?.user.id||'');});
+  return()=>{active=false;};
+ },[]);
  useEffect(()=>{let active=true;const term=search.trim();if(!term){setSearchResults(null);setSearching(false);return;}setSearching(true);const timer=window.setTimeout(()=>{if(!supabase)return;void supabase.from('workspace_messages').select('*').eq('group_key',group.key).ilike('body','%'+term.replace(/[\\%_]/g,'\\$&')+'%').order('created_at',{ascending:false}).limit(100).then(r=>{if(!active)return;setSearching(false);if(r.error)setError(databaseMessage(r.error));else setSearchResults((r.data as LiveMessage[]).reverse());});},300);return()=>{active=false;window.clearTimeout(timer);};},[search,group.key,messages]);
  function addFiles(incoming:File[]){if(files.length+incoming.length>6){setError('Attach up to six files.');return;}if(incoming.some(f=>!f.size||f.size>25*1024*1024)){setError('Each file must be between 1 byte and 25 MB.');return;}setFiles(v=>[...v,...incoming]);}
  async function toggleRecording(){
@@ -110,6 +115,31 @@ export default function LiveGroupChat({group,onRead,caseContext,profile,onOpenCa
    if(alive.current){setDraft('');setFiles([]);pending.current=null;}
   }catch(problem){if(uploaded.length)await supabase.storage.from('chat-attachments').remove(uploaded);if(alive.current)setError(databaseMessage(problem));}finally{if(alive.current)setSending(false);}
  }
+ async function startGroupCall(){
+  if(!supabase||calling)return;setCalling(true);setError('');let channel:ReturnType<typeof supabase.channel>|null=null;
+  try{
+   const targetRole=profile.role==='Client'?'CRO':callTarget==='group'?null:callTarget;
+   const city=caseContext?.city==='Rawalpindi'?'Islamabad':caseContext?.city;
+   const targetGroup=targetRole==='FSO'&&group.kind==='company'&&city?`group:city:${city}`:group.key;
+   const callSetupHint=targetGroup.startsWith('group:company:')
+    ?'Company chat calls require supabase/migrations/20261113_portal_call_roles.sql.'
+    :'Group calls require supabase/migrations/20261112_group_call_invites.sql.';
+   await supabase.realtime.setAuth();
+   channel=supabase.channel(`call:${targetGroup}:lobby`,{config:{private:true,broadcast:{self:false}}});
+   await new Promise<void>((resolve,reject)=>{
+    const timer=window.setTimeout(()=>reject(new Error(`Call invitation channel timed out. ${callSetupHint} If it is applied, check the Supabase Realtime connection and retry.`)),10000);
+    channel!.subscribe(status=>{
+     if(status==='SUBSCRIBED'){window.clearTimeout(timer);resolve();}
+     else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){window.clearTimeout(timer);reject(new Error(`Call invitation channel failed (${status}). ${callSetupHint} If it is applied, check the Supabase Realtime connection and retry.`));}
+    });
+   });
+    const room=crypto.randomUUID();
+    const result=await channel.send({type:'broadcast',event:'incoming-call',payload:{caller:profile.name,callerEmail:profile.email,expiresAt:Date.now()+60000,room,targetRole}});
+   if(result!=='ok')throw new Error('Could not send the group call invitation.');
+    setCallGroupKey(targetGroup);setCallRoom(room);setCallOpen(false);
+  }catch(problem){if(alive.current)setError(databaseMessage(problem));}
+  finally{if(channel)void supabase.removeChannel(channel);if(alive.current)setCalling(false);}
+ }
  async function loadOlder(){
   const oldest=messages[0];if(!supabase||!oldest)return;
   setLoading(true);
@@ -117,16 +147,17 @@ export default function LiveGroupChat({group,onRead,caseContext,profile,onOpenCa
   if(!alive.current)return;setLoading(false);
   if(result.error)setError(databaseMessage(result.error));else{setMessages(current=>mergeMessages(current,result.data as LiveMessage[]));setOlder(result.data.length===100);}
  }
- return <section className="box live-workspace-group"><div className="chat-thread-header"><div><b>{group.label}</b><small>{connection}</small></div><div className="chat-header-tools"><button aria-label="Search chat" title="Search all messages" onClick={()=>{setSearchOpen(v=>!v);setSearch('');}}><Search size={18}/></button>{group.kind==='city'&&<button aria-label="Group call" title="Group call" onClick={()=>setCallOpen(v=>!v)}><Phone size={18}/></button>}<button aria-label="Reload messages" onClick={()=>void load()}><RefreshCw size={16}/></button></div></div>
+ const canCallCaseFso=group.kind==='company'&&!!caseContext&&profile.role!=='Client'&&['CRO','CRO Manager','SFSO','SOM'].includes(profile.role);
+ const callRoles=group.kind==='city'?['CRO','SFSO','SOM','FSO']:['CRO','SFSO','SOM',...(canCallCaseFso?['FSO']:[])];
+ return <section className="box live-workspace-group"><div className="chat-thread-header"><div><b>{group.label}</b><small>{connection}</small></div><div className="chat-header-tools"><button aria-label="Search chat" title="Search all messages" onClick={()=>{setSearchOpen(v=>!v);setSearch('');}}><Search size={18}/></button><div className="chat-call-menu-anchor"><button aria-label={profile.role==='Client'?'Call CRO':'Group call'} title={profile.role==='Client'?'Call CRO':'Group call'} aria-expanded={profile.role==='Client'?undefined:callOpen} onClick={()=>profile.role==='Client'?void startGroupCall():setCallOpen(v=>!v)}><Phone size={18}/></button>{callOpen&&profile.role!=='Client'&&<div className="chat-call-panel" role="dialog" aria-label="Start an audio call"><b>Start an audio call</b><label>Call<select value={callTarget} onChange={event=>setCallTarget(event.target.value)}><option value="group">Whole group</option>{callRoles.map(role=><option key={role} value={role}>Only {role}</option>)}</select></label><p>{callTarget==='group'?`Everyone in ${group.label} receives a prompt to join or decline.`:callTarget==='FSO'&&group.kind==='company'?`Only FSOs assigned to case city ${caseContext?.city} receive a prompt.`:`Only ${callTarget} members of ${group.label} receive a prompt.`}</p><div className="chat-call-menu-actions"><button type="button" className="primary" disabled={calling} onClick={()=>void startGroupCall()}>{calling?'Calling...':'Start call'}</button><button type="button" onClick={()=>setCallOpen(false)}>Cancel</button></div></div>}</div><button aria-label="Reload messages" onClick={()=>void load()}><RefreshCw size={16}/></button></div></div>
  {searchOpen&&<div className="chat-search"><Search size={16}/><input autoFocus aria-label="Search words or Case ID" placeholder="Search words or Case ID across this chat..." value={search} onChange={e=>setSearch(e.target.value)}/>{searching?<small>Searching...</small>:searchResults&&<small>{searchResults.length}{searchResults.length===100?'+':''} matches</small>}</div>}
- {callOpen&&<div className="chat-call-panel"><b>Internal group audio call</b><p>Prepare an invitation, send it to the group, then select Join call. Audio stays inside this app.</p><button type="button" onClick={()=>{setDraft(`Internal voice call: ${crypto.randomUUID()}`);setCallOpen(false);}}>Prepare call invitation</button></div>}
- {callRoom&&<GroupAudioCall room={callRoom} group={group.key} name={profile.name} onLeave={()=>setCallRoom(null)}/>}
+ {callRoom&&<GroupAudioCall room={callRoom} group={callGroupKey} name={profile.name} onLeave={()=>setCallRoom(null)}/>}
 
  {caseContext&&<p className="live-chat-case-context">Case {caseContext.case_id} - Messages include this case reference.</p>}
  {openingCase&&<p role="status">Opening case...</p>}
  {caseMatches.length>0&&<div className="chat-case-picker"><b>Choose the case record</b><p>This Case ID appears on more than one record.</p>{caseMatches.map(item=><button type="button" key={workbookKey(item)} onClick={()=>onOpenCase?.(item)}>{item.case_id} - {item.company} - {item.city} - {item.source_sheet}, row {item.source_row}</button>)}<button type="button" onClick={()=>setCaseMatches([])}>Cancel</button></div>}
  {error&&<div className="workbook-error" role="alert">{error}</div>}
- <div className="messages live-chat-messages" role="log" aria-label="Group messages" aria-live="polite">{!searchResults&&older&&messages.length>0&&<button disabled={loading} onClick={()=>void loadOlder()}>Load older messages</button>}{loading&&!messages.length&&<p role="status">Loading messages...</p>}{!loading&&!messages.length&&!error&&<div className="field-empty"><p>No messages yet. Start the conversation.</p></div>}{searchResults?.length===0&&<p>No messages match this search.</p>}{(searchResults??messages).map(message=><article className="live-chat-bubble" key={message.id}><small>{message.sender_name} · {message.sender_role}</small><p><ChatCaseText text={message.body} disabled={openingCase} onOpen={id=>void openCase(id)}/></p>{group.kind==='city'&&message.body.match(/Internal voice call: ([0-9a-f-]{36})/i)&&<button type="button" className="chat-call-link" onClick={()=>setCallRoom(message.body.match(/Internal voice call: ([0-9a-f-]{36})/i)![1])}><Phone size={14}/>Join group call</button>}{message.attachments?.map(file=><ChatAttachment key={file.path} file={file}/>)}{message.live_location&&<a className="chat-location-link" href={`https://www.google.com/maps?q=${message.live_location.lat},${message.live_location.lng}`} target="_blank" rel="noreferrer"><MapPin size={14}/>{message.live_location.active&&Date.parse(message.live_location.until)>Date.now()?'Live location':'Last shared location'} - updated {new Date(message.live_location.updated_at).toLocaleTimeString()}</a>}<time dateTime={message.created_at}>{new Intl.DateTimeFormat('en-PK',{timeZone:'Asia/Karachi',dateStyle:'medium',timeStyle:'short'}).format(new Date(message.created_at))} PKT</time></article>)}<div ref={bottom}/></div>
+ <div className="messages live-chat-messages" role="log" aria-label="Group messages" aria-live="polite">{!searchResults&&older&&messages.length>0&&<button disabled={loading} onClick={()=>void loadOlder()}>Load older messages</button>}{loading&&!messages.length&&<p role="status">Loading messages...</p>}{!loading&&!messages.length&&!error&&<div className="field-empty"><p>No messages yet. Start the conversation.</p></div>}{searchResults?.length===0&&<p>No messages match this search.</p>}{(searchResults??messages).map(message=><article className={'live-chat-bubble'+(senderId&&message.sender_id===senderId?' is-mine':'')} key={message.id}><small>{message.sender_name} · {message.sender_role}</small><p><ChatCaseText text={message.body} disabled={openingCase} onOpen={id=>void openCase(id)}/></p>{message.attachments?.map(file=><ChatAttachment key={file.path} file={file}/>)}{message.live_location&&<a className="chat-location-link" href={`https://www.google.com/maps?q=${message.live_location.lat},${message.live_location.lng}`} target="_blank" rel="noreferrer"><MapPin size={14}/>{message.live_location.active&&Date.parse(message.live_location.until)>Date.now()?'Live location':'Last shared location'} - updated {new Date(message.live_location.updated_at).toLocaleTimeString()}</a>}<time dateTime={message.created_at}>{new Intl.DateTimeFormat('en-PK',{timeZone:'Asia/Karachi',dateStyle:'medium',timeStyle:'short'}).format(new Date(message.created_at))} PKT</time></article>)}<div ref={bottom}/></div>
  {files.length>0&&<div className="chat-selected-files">{files.map((file,index)=><span key={index}>{file.name}<button type="button" aria-label={`Remove ${file.name}`} onClick={()=>setFiles(v=>v.filter((_,i)=>i!==index))}><X size={12}/></button></span>)}</div>}
  {sharing&&<div className="chat-sharing-status" role="status">Sharing your live location for up to 15 minutes while this chat is open.<button onClick={()=>void stopLocation()}>Stop sharing</button></div>}
  <form className="chat-composer" onSubmit={event=>{event.preventDefault();void send();}}>

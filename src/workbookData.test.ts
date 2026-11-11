@@ -1,6 +1,6 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { workbookKey, sourceText, safeEvidenceUrl, workbookPageCsv, type WorkbookCase } from './workbookData';
+import { workbookKey, sourceText, safeEvidenceUrl, workbookPageCsv, caseAgeLabel, type WorkbookCase } from './workbookData';
 import { workbookFields } from './workbookFields';
 const row: WorkbookCase = { source_sha256: 'snapshot', source_sheet: 'B2B - 2025', source_row: 2, case_id: 'DUPLICATE' };
 test('duplicate display IDs retain separate source identities', () => {
@@ -13,6 +13,15 @@ test('source display preserves zero, leading zeros and whitespace', () => {
   assert.equal(sourceText('001234'), '001234');
   assert.equal(sourceText(' a\n '), ' a\n ');
   assert.equal(sourceText(null), '—');
+});
+test('case age labels cover today, yesterday, older, missing and invalid dates', () => {
+  const today = new Date(2026, 10, 10, 12);
+  assert.equal(caseAgeLabel('2026-11-10', today), 'Today');
+  assert.equal(caseAgeLabel('2026-11-09', today), '1 day ago');
+  assert.equal(caseAgeLabel('2026-11-03', today), '7 days ago');
+  assert.equal(caseAgeLabel(undefined, today), undefined);
+  assert.equal(caseAgeLabel('not-a-date', today), undefined);
+  assert.equal(caseAgeLabel('2026-11-11', today), undefined);
 });
 test('only HTTP evidence links become navigable', () => {
   assert.equal(safeEvidenceUrl('javascript:alert(1)'), undefined);

@@ -15,6 +15,8 @@ const users={
  fso:{id:'10000000-0000-4000-8000-000000000003',role:'FSO',city:'Islamabad',officer_name:'Test Officer One'},
  other:{id:'10000000-0000-4000-8000-000000000004',role:'FSO',city:'Islamabad',officer_name:'Test Officer Two'},
  sfso:{id:'10000000-0000-4000-8000-000000000005',role:'SFSO',city:'Karachi'},
+ sfso_islamabad:{id:'10000000-0000-4000-8000-000000000006',role:'SFSO',city:'Islamabad'},
+ fso_three:{id:'10000000-0000-4000-8000-000000000007',role:'FSO',city:'Islamabad',officer_name:'Test Officer Three'},
 };
 async function login(key){const {id,...app_metadata}=users[key];await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:id,app_metadata})]);await db.exec('set role authenticated');}
 const action=(row,kind,data={})=>db.query('select public.desk_case_action($1,$2,$3,$4,$5) as value',[sha,'B2B - 2025',row,kind,JSON.stringify(data)]);
@@ -37,7 +39,7 @@ try {
  grant select,insert,delete on storage.objects to authenticated;`);
  const migrations=process.argv.includes('--bundle')
   ? ['20261102_workbook_import.sql','20261103_workbook_read_access.sql','20261103_scoped_dashboard_timeout_fix.sql','20261103_workflow_realtime_chat.sql']
-  : ['20261102_workbook_import.sql','20261103_workbook_read_access.sql','20261103_scoped_dashboard_timeout_fix.sql','20261103_field_evidence.sql','20261103_workflow_realtime_chat.sql','20261104_portal_parity.sql','20261104_portal_parity_client_only.sql','20261104_portal_workspace_details.sql','20261106_workbook_calculations.sql','20261110_workflow_query_performance.sql','20261111_field_chat_updates.sql'];
+  : ['20261102_workbook_import.sql','20261103_workbook_read_access.sql','20261103_scoped_dashboard_timeout_fix.sql','20261103_field_evidence.sql','20261103_workflow_realtime_chat.sql','20261104_portal_parity.sql','20261104_portal_parity_client_only.sql','20261104_portal_workspace_details.sql','20261106_workbook_calculations.sql','20261110_workflow_query_performance.sql','20261111_field_chat_updates.sql','20261112_group_call_invites.sql','20261113_portal_call_roles.sql','20261114_case_reopen.sql','20261115_client_intake_sfso_routing.sql','20261116_case_lifecycle_auto_messages.sql'];
  for(const filename of migrations){
   try{await db.exec(await readFile(new URL('../../supabase/migrations/'+filename,import.meta.url),'utf8'));}
   catch(error){throw new Error(filename+': '+error.message,{cause:error});}
@@ -57,12 +59,16 @@ try {
  await check('Client sees own company and cannot use CRO actions',async()=>{
   await login('client');assert.equal((await list()).total,2);
   await rejects('select public.desk_case_action($1,$2,2,$3,$4)',[sha,'B2B - 2025','progress','{}'],/not permitted/);
+  await rejects("select public.desk_case_action($1,$2,2,'note',$3)",[sha,'B2B - 2025',JSON.stringify({body:'Client cannot add internal notes'})],/not permitted/);
  });
  await check('CRO cannot create a case',async()=>{
   await login('cro');await rejects("select public.portal_create_case($1,gen_random_uuid(),'{}')",[sha],/not permitted/);
  });
  await check('Notes and classification preserve New queue; notes alone cannot close',async()=>{
   await action(2,'note',{body:'A saved internal note.',classification:'Genuine'});
+  await login('client');
+  assert.equal((await db.query("select id from public.case_workflow_events where source_sha256=$1 and source_row=2 and action='note'",[sha])).rows.length,0);
+  await login('cro');
   assert.equal((await list({status:'__to_ack__'})).total,3);
   await rejects("select public.desk_case_action($1,'B2B - 2025',2,'close','{}')",[sha],/findings before closing/);
  });
@@ -92,6 +98,31 @@ try {
   await login('cro');await action(2,'findings',{body:'Verified the incident and documented the resolution.'});await action(2,'close');
   assert.equal((await list({status:'Closed'})).total,1);
   const summary=(await db.query('select public.workbook_summary($1) as value',[sha])).rows[0].value;assert.equal(summary.closed,1);assert.equal(summary.pending,1);
+  const closeNotices=(await db.query("select group_key,body from public.workspace_messages where body like '%closed by CRO%'")).rows;
+  assert.ok(closeNotices.some(m=>m.group_key==='group:city:Islamabad'&&m.body.includes('DAR-ISL-NOV-26-1')&&m.body.includes('closed by CRO')));
+  assert.ok(closeNotices.some(m=>m.group_key==='group:company:Daraz'&&m.body.includes('DAR-ISL-NOV-26-1')&&m.body.includes('closed by CRO')));
+ });
+ await check('Only CRO can reopen; effective status, counts, and actions return to open',async()=>{
+  await login('client');
+  await rejects("select public.desk_reopen_case($1,'B2B - 2025',2)",[sha],/Only CRO may reopen/);
+  await login('cro');
+  const reopened=(await db.query("select public.desk_reopen_case($1,'B2B - 2025',2) as value",[sha])).rows[0].value;
+  assert.equal(reopened.stage,'In progress');
+  assert.equal(reopened.assigned_fso,'Test Officer One');
+  assert.equal((await list({status:'Closed'})).total,0);
+  assert.equal((await list({status:'Pending'})).total,1);
+  assert.equal((await list({status:'__open__'})).total,3);
+  assert.ok((await list({status:'__active__'})).rows.some(row=>row.source_row===2));
+  assert.equal((await db.query("select status from public.workbook_effective_cases where source_sha256=$1 and source_row=2",[sha])).rows[0].status,'Pending');
+  const summary=(await db.query('select public.workbook_summary($1) as value',[sha])).rows[0].value;
+  assert.equal(summary.closed,0);assert.equal(summary.pending,1);
+  assert.equal((await db.query("select count(*)::int as n from public.case_workflow_events where source_sha256=$1 and source_row=2 and action='reopen'",[sha])).rows[0].n,1);
+  const notices=(await db.query("select group_key,body from public.workspace_messages where body like '%DUPLICATE%' or body like '%DAR-ISL-NOV-26-1%'" )).rows;
+  assert.ok(notices.some(message=>message.group_key==='group:city:Islamabad'&&message.body.includes('reopened by CRO')));
+  assert.ok(notices.some(message=>message.group_key==='group:company:Daraz'&&message.body.includes('reopened by CRO')));
+  assert.equal((await list({status:'Closed'})).total,0);
+  assert.equal((await db.query("select status from public.workbook_effective_cases where source_sha256=$1 and source_row=2",[sha])).rows[0].status,'Pending');
+  await action(2,'close');
  });
  await check('All original source rows remain unchanged after operational actions',async()=>{
   await db.exec('reset role');assert.deepEqual((await db.query('select * from public.workbook_import_cases order by source_row')).rows,original);
@@ -101,6 +132,23 @@ try {
   const request='20000000-0000-4000-8000-000000000001';
   const create=async id=>(await db.query('select public.portal_create_case($1,$2,$3) as id',[sha,id,data])).rows[0].id;
   const first=await create(request);assert.equal(await create(request),first);
+  const firstRow=(await db.query('select source_row from public.workbook_import_cases where case_id=$1',[first])).rows[0].source_row;
+  assert.ok((await db.query('select body from public.workspace_messages where group_key=$1 and body like $2',['group:company:Daraz','%'+first+'%'])).rows.some(row=>row.body.includes('forwarded to SFSO')));
+  await login('cro');
+  await rejects('select public.desk_case_action($1,$2,$3,\'acknowledge\',$4)',[sha,'Portal Intake',firstRow,'{}'],/routed to SFSO/);
+  await rejects('select public.desk_case_action($1,$2,$3,\'assign\',$4)',[sha,'Portal Intake',firstRow,JSON.stringify({officer:'Test Officer Three',sfso_unavailable:true})],/Only SFSO may assign/);
+  await login('sfso_islamabad');
+  assert.ok((await db.query('select body from public.workspace_messages where group_key=$1 and body like $2',['group:city:Islamabad','%'+first+'%'])).rows.some(row=>row.body.includes('awaiting SFSO acknowledgement')));
+  await rejects("select public.desk_case_action($1,'Portal Intake',$2,'assign',$3)",[sha,firstRow,JSON.stringify({officer:'Test Officer Three'})],/Acknowledge this client-raised case/);
+  const acknowledged=(await db.query('select public.sfso_acknowledge_case($1,$2,$3) as value',[sha,'Portal Intake',firstRow])).rows[0].value;
+  assert.equal(acknowledged.stage,'Acknowledged');
+  assert.ok((await db.query('select body from public.workspace_messages where group_key=$1 and body like $2',['group:company:Daraz','%'+first+'%'])).rows.some(row=>row.body.includes('acknowledged by SFSO')));
+  await db.query('select public.desk_case_action($1,$2,$3,\'assign\',$4)',[sha,'Portal Intake',firstRow,JSON.stringify({officer:'Test Officer Three'})]);
+  assert.ok((await db.query('select body from public.workspace_messages where group_key=$1 and body like $2',['group:city:Islamabad','%'+first+'%'])).rows.some(row=>row.body.includes('acknowledged by SFSO')&&row.body.includes('assigned to FSO Test Officer Three')));
+  await login('fso_three');
+  await db.query('select public.desk_case_action($1,$2,$3,\'start\',$4)',[sha,'Portal Intake',firstRow,'{}']);
+  assert.ok((await db.query('select body from public.workspace_messages where group_key=$1 and body like $2',['group:city:Islamabad','%'+first+'%'])).rows.some(row=>row.body.includes('acknowledged by FSO Test Officer Three')));
+  await login('client');
   const second=await create('20000000-0000-4000-8000-000000000002');assert.notEqual(first,second);assert.match(first,/^DAR-ISL-/);
   const retry='20000000-0000-4000-8000-000000000003';
   const concurrent=await Promise.all([create(retry),create(retry)]);assert.equal(concurrent[0],concurrent[1]);
@@ -162,9 +210,20 @@ try {
   await rejects("insert into public.workspace_messages(id,group_key,body,attachments) values(gen_random_uuid(),'group:city:Islamabad','Attachment',$1)",[JSON.stringify([{name:'bad.pdf',type:'application/pdf',path:'someone-else/group:city:Islamabad/fake'}])],/Invalid chat attachment/);
  });
  await check('Private call signaling allows same-city staff and rejects clients/other cities',async()=>{
+  await login('cro');await db.query("select set_config('test.realtime_topic','call:group:city:Islamabad:lobby',false)");
+  await db.query("insert into realtime.messages(body) values('incoming call')");
+  await db.query("select set_config('test.realtime_topic','call:group:company:PostEx:lobby',false)");
+  await db.query("insert into realtime.messages(body) values('client group invitation')");
+  await db.query("select set_config('test.realtime_topic','call:group:city:Islamabad:active',false)");
+  await db.query("insert into realtime.messages(body) values('audio signal')");
   await login('fso');await db.query("select set_config('test.realtime_topic','call:group:city:Islamabad:40000000-0000-4000-8000-000000000001',false)");
   await db.query("insert into realtime.messages(body) values('signal')");
-  await login('client');await rejects("insert into realtime.messages(body) values('signal')",[],/row-level security/);
+  await login('client');await db.query("select set_config('test.realtime_topic','call:group:company:Daraz:lobby',false)");
+  await db.query("insert into realtime.messages(body) values('client incoming call')");
+  await db.query("select set_config('test.realtime_topic','call:group:city:Islamabad:lobby',false)");
+  await rejects("insert into realtime.messages(body) values('incoming call')",[],/row-level security/);
+  await db.query("select set_config('test.realtime_topic','call:group:city:Islamabad:40000000-0000-4000-8000-000000000001',false)");
+  await rejects("insert into realtime.messages(body) values('signal')",[],/row-level security/);
   await login('sfso');await rejects("insert into realtime.messages(body) values('signal')",[],/row-level security/);
  });
  await check('Bulk dashboard/list queries retain scope across 30,000 additional cases',async()=>{

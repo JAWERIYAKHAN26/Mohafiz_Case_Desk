@@ -1,4 +1,6 @@
-.workbook-main .header-controls { margin-left: auto; }
+.workbook-page-heading { justify-content:flex-start; gap:16px; }
+.workbook-page-title { flex:1; min-width:0; }
+.workbook-page-heading .header-controls { margin-left:auto; flex:none; }
 .workbook-main .account-profile-welcome { max-width:100%; white-space:normal; }
 .live-detail-toolbar, .live-detail-toolbar > div { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .live-detail-toolbar { justify-content:space-between; margin-bottom:15px; }
@@ -89,6 +91,15 @@
 .workbook-board-card .link { font-size:11px; }
 .workbook-board-card .workbook-location { font-size:10px; margin-top:7px; width:100%; }
 .workbook-board-meta { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:10px; }
+.workbook-company-mark { display:inline-flex; align-items:center; gap:6px; }
+.workbook-company-logo { position:relative; display:inline-grid; place-items:center; width:22px; height:22px; flex:none; overflow:hidden; border:1px solid #d5dad6; border-radius:50%; background:#fff; }
+.workbook-company-logo.buscaro { border:0; background:transparent; }
+.workbook-company-logo.daraz { border:0; border-radius:3px; background:transparent; }
+.workbook-company-logo img { display:block; width:100%; height:100%; object-fit:contain; }
+.workbook-company-logo.postex { color:#090909; font:700 17px/1 Arial,sans-serif; }
+.workbook-company-logo.postex i { position:absolute; width:6px; height:6px; right:3px; bottom:3px; border-radius:50%; background:#79bf50; }
+.workbook-company-logo.other { color:var(--accent); font-size:10px; font-weight:700; }
+.workbook-board-card .workbook-case-age { display:block; margin-top:5px; color:var(--muted); font-size:10px; }
 .workbook-main > header { display:flex !important; }
 .workbook-content > .heading { display:flex !important; }
 @media(max-width:700px) { .workbook-stats { grid-template-columns:repeat(3,minmax(0,1fr)); } .workbook-heading-actions { flex-wrap:wrap; justify-content:flex-end; } }
@@ -123,6 +134,12 @@
 .workbook-stats .workbook-unavailable { font-size:13px; font-weight:500; color:var(--muted); line-height:1.5; }
 .live-chat-messages { height:min(60vh,560px); min-height:280px; overflow-y:auto; padding:14px; background:var(--soft); border-radius:8px; margin-bottom:12px; display:flex; flex-direction:column; gap:12px; }
 .live-chat-bubble { max-width:min(85%,620px); background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; overflow-wrap:anywhere; }
+.live-chat-bubble:not(.is-mine) { align-self:flex-start; }
+.live-chat-bubble.is-mine { align-self:flex-end; background:var(--button); border-color:var(--button); color:#fff; }
+.live-chat-bubble.is-mine small,.live-chat-bubble.is-mine time { color:#ffffffd1; }
+.live-chat-bubble.is-mine .chat-case-link,.live-chat-bubble.is-mine .chat-file-link,.live-chat-bubble.is-mine .chat-location-link { color:#fff; }
+.live-chat-bubble.is-mine .chat-file-link { background:#ffffff18; border-color:#ffffff55; }
+.live-chat-bubble.is-mine .chat-attachment [role="alert"] { color:#fff; }
 .live-chat-bubble p { white-space:pre-wrap; font-size:12px; line-height:1.6; margin:6px 0; }
 .live-chat-bubble time { font-size:9px; color:var(--muted); }
 .live-case-action-buttons { display:flex; flex-wrap:wrap; gap:10px; margin:14px 0; }
@@ -199,6 +216,15 @@
 .live-detail-assignment .live-sfso-unavailable { padding-bottom:10px; }
 .chat-header-tools { display:flex; align-items:center; gap:8px; }
 .chat-header-tools button,.chat-composer > button { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; min-width:38px; min-height:38px; }
+.chat-call-menu-anchor { position:relative; }
+.chat-call-menu-anchor > button[aria-expanded="true"] { color:var(--accent); background:var(--hover); }
+.chat-call-menu-anchor .chat-call-panel { position:absolute; z-index:20; top:calc(100% + 8px); right:0; width:min(320px,calc(100vw - 32px)); padding:14px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:var(--text); box-shadow:0 12px 32px #102b3226; }
+.chat-call-menu-anchor .chat-call-panel > b { display:block; margin-bottom:10px; font-size:13px; }
+.chat-call-menu-anchor .chat-call-panel label { display:grid; gap:5px; }
+.chat-call-menu-anchor .chat-call-panel select { width:100%; min-width:0; }
+.chat-call-menu-anchor .chat-call-panel p { margin:9px 0 12px; color:var(--muted); line-height:1.45; }
+.chat-call-menu-actions { display:flex; justify-content:flex-end; gap:8px; }
+.chat-call-menu-actions button { min-height:34px; padding:6px 10px; }
 .chat-search { display:flex; align-items:center; gap:10px; padding:12px 18px; border-bottom:1px solid var(--border); }
 .chat-search input { flex:1; min-width:0; }
 .chat-search small { white-space:nowrap; }
@@ -214,6 +240,15 @@
 .chat-sharing-status,.chat-call-panel { padding:12px 18px; border-bottom:1px solid var(--border); font-size:12px; }
 .chat-sharing-status button { margin-left:12px; }
 .chat-call-panel p { margin:8px 0; }
+.call-invite-scrim,.call-active-scrim { position:fixed; z-index:1200; inset:0; display:grid; place-items:center; padding:20px; background:#102b32a8; }
+.call-invite-dialog { width:min(100%,390px); padding:24px; border:1px solid var(--border); border-radius:12px; background:var(--card); color:var(--text); box-shadow:0 18px 55px #102b3240; text-align:center; }
+.call-invite-icon { display:grid; place-items:center; width:44px; aspect-ratio:1; margin:0 auto 12px; border-radius:50%; background:#d9f1e9; color:#176653; }
+.call-invite-dialog > small { color:var(--muted); }
+.call-invite-dialog h2 { margin:8px 0; font-size:21px; }
+.call-invite-dialog p { margin:0 0 20px; color:var(--muted); }
+.call-invite-dialog > div { display:flex; justify-content:center; gap:10px; }
+.call-invite-dialog button { display:inline-flex; align-items:center; justify-content:center; gap:7px; }
+.call-active-scrim .chat-call-panel { width:min(100%,460px); border:1px solid var(--border); border-radius:12px; background:var(--card); color:var(--text); box-shadow:0 18px 55px #102b3240; }
 .chat-voice-player { display:block; width:min(280px,100%); margin:8px 0; }
 @media(max-width:600px) { .live-case-detail .log-note-composer { grid-template-columns:minmax(0,1fr); }.live-case-detail .note-avatar { display:none; }.chat-header-tools { gap:3px; }.chat-search { flex-wrap:wrap; }.live-workspace-group .chat-composer { margin:8px; padding:4px; gap:1px; } }
 

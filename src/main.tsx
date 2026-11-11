@@ -578,7 +578,7 @@ function App() {
       `Field Officer ${name} acknowledged Case #${caseItem.id}`
     );
 
-    // Auto message dispatched EXCLUSIVELY to Internal Case Group
+    // Auto message dispatched to Internal City Group and Internal Case Conversation
     const internalMsg: Msg = {
       user: `${name} (FSO)`,
       role: 'FSO',
@@ -586,11 +586,16 @@ function App() {
       time: time(),
       sentAt: Date.now(),
       type: 'text',
+      caseId: caseItem.id,
     };
+
+    const internalKey = internalConversationKey(caseItem);
+    const internalCityKey = internalGroupKey(caseItem.city);
 
     setMsgs(all => ({
       ...all,
-      [internalConversationKey(caseItem)]: [...(all[internalConversationKey(caseItem)] || []), internalMsg],
+      [internalKey]: [...(all[internalKey] || []), internalMsg],
+      [internalCityKey]: [...(all[internalCityKey] || []), internalMsg],
     }));
 
     setNotice(`Case #${caseItem.id} acknowledged by ${name}. Confirmation message sent to internal group.`);
@@ -754,18 +759,22 @@ function App() {
       const closureMessage: Msg = {
         user: 'Mohafiz Operations',
         role: 'CRO',
-        text: `Case #${c.id} has been closed from our side.`,
+        text: `Case #${c.id} has been closed by CRO.`,
         time: time(),
         caseId: c.id,
         sentAt: Date.now(),
         type: 'text',
       };
       const clientKey = clientGroupKey(c.co);
+      const caseClientKey = 'c' + c.id;
       const internalKey = internalConversationKey(c);
+      const internalCityKey = internalGroupKey(c.city);
       setMsgs(all => ({
         ...all,
         [clientKey]: [...(all[clientKey] || []), closureMessage],
+        [caseClientKey]: [...(all[caseClientKey] || []), closureMessage],
         [internalKey]: [...(all[internalKey] || []), closureMessage],
+        [internalCityKey]: [...(all[internalCityKey] || []), closureMessage],
       }));
     }
     setCases(all => all.map(x => (x.id === c.id ? { ...x, ...v } : x)));
@@ -922,6 +931,40 @@ function App() {
     setNotice(`Case #${caseItem.id} marked as unable to proceed and escalated to SFSO for reassignment.`);
   };
 
+  // SFSO Acknowledges Case (Initial Intake or Escalation)
+  const acknowledgeCaseBySfso = (caseItem: C) => {
+    patch(
+      caseItem,
+      {
+        acknowledgedAt: time(),
+        acknowledgedBy: `${name} (${role})`,
+        stage: 'Escalated',
+      },
+      `Case #${caseItem.id} acknowledged by SFSO ${name}`
+    );
+
+    const internalMsg: Msg = {
+      user: `${name} (${role})`,
+      role,
+      text: `📢 Case #${caseItem.id} is acknowledged by SFSO ${name}. Ready for FSO assignment. Location: ${caseItem.exactLocation || caseItem.city}.`,
+      time: time(),
+      sentAt: Date.now(),
+      type: 'text',
+      caseId: caseItem.id,
+    };
+
+    const internalKey = internalConversationKey(caseItem);
+    const internalCityKey = internalGroupKey(caseItem.city);
+
+    setMsgs(all => ({
+      ...all,
+      [internalKey]: [...(all[internalKey] || []), internalMsg],
+      [internalCityKey]: [...(all[internalCityKey] || []), internalMsg],
+    }));
+
+    setNotice(`Case #${caseItem.id} acknowledged by SFSO ${name}. Ready for FSO assignment.`);
+  };
+
   // SFSO Assigns Case to Officer (Initial or Reassignment)
   const assignCaseBySfso = (caseItem: C, chosenOfficer: string, sfsoUnavailable = false) => {
     const eligibleOfficer = visibleFSOs.find(officer => officer.name === chosenOfficer);
@@ -932,10 +975,11 @@ function App() {
       return;
     }
     const workload = getFsoWorkload(chosenOfficer);
-    const acknowledgement = caseItem.stage === 'New'
+    const acknowledgement = caseItem.stage === 'New' || caseItem.stage === 'Escalated'
       ? { acknowledgedAt: time(), acknowledgedBy: `${name} (${role})` }
       : {};
     const internalKey = internalConversationKey(caseItem);
+    const internalCityKey = internalGroupKey(caseItem.city);
     const wasReassigned = Boolean(caseItem.busyReason);
     const reassignedNote = (isCro ? ' (SFSO unavailable; assigned by CRO)' : '') + (wasReassigned
       ? ` (Reassigned from ${caseItem.busyByOfficer || 'previous officer'} who reported unable to proceed)`
@@ -963,15 +1007,17 @@ function App() {
       const internalMsg: Msg = {
         user: `${name} (${role})`,
         role,
-        text: `🚨 Case #${caseItem.id} assigned to Field Officer ${chosenOfficer} by ${role} ${name} (Queued Task #${newQueueOrder})${reassignedNote}. Priority: ${caseItem.priority}. Location: ${caseItem.exactLocation || caseItem.city}.`,
+        text: `📢 Case #${caseItem.id} is acknowledged by SFSO ${name} and assigned to FSO ${chosenOfficer} (Queued Task #${newQueueOrder})${reassignedNote}. Priority: ${caseItem.priority}. Location: ${caseItem.exactLocation || caseItem.city}.`,
         time: time(),
         sentAt: Date.now(),
         type: 'text',
+        caseId: caseItem.id,
       };
 
       setMsgs(all => ({
         ...all,
         [internalKey]: [...(all[internalKey] || []), internalMsg],
+        [internalCityKey]: [...(all[internalCityKey] || []), internalMsg],
       }));
 
       setSelected(caseItem.id);
@@ -1000,15 +1046,17 @@ function App() {
       const internalMsg: Msg = {
         user: `${name} (${role})`,
         role,
-        text: `🚨 Case #${caseItem.id} assigned to Field Officer ${chosenOfficer} by ${role} ${name} (Immediate Dispatch)${reassignedNote}. Location: ${caseItem.exactLocation || caseItem.city}.`,
+        text: `📢 Case #${caseItem.id} is acknowledged by SFSO ${name} and assigned to FSO ${chosenOfficer} (Immediate Dispatch)${reassignedNote}. Location: ${caseItem.exactLocation || caseItem.city}.`,
         time: time(),
         sentAt: Date.now(),
         type: 'text',
+        caseId: caseItem.id,
       };
 
       setMsgs(all => ({
         ...all,
         [internalKey]: [...(all[internalKey] || []), internalMsg],
+        [internalCityKey]: [...(all[internalCityKey] || []), internalMsg],
       }));
 
       setSelected(caseItem.id);
@@ -2018,8 +2066,8 @@ function App() {
               </p>
             </div>
 
-            {/* Client reports show active follow-ups until the case is closed; CRO always sees both records. */}
-            {(role !== 'Client' || reportModalCase.stage !== 'Closed') && (
+            {/* Follow-up history is internal; clients only receive official findings. */}
+            {role !== 'Client' && (
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2076,8 +2124,8 @@ function App() {
               </div>
             )}
 
-            {/* Clients only see final findings after closure; CRO retains full report access. */}
-            {(role !== 'Client' || reportModalCase.stage === 'Closed') && <div style={{ marginBottom: 20 }}>
+            {/* Clients see official findings as soon as they are recorded, but never internal classifications. */}
+            {(role !== 'Client' || (reportModalCase.findings || []).some(finding => finding.kind !== 'classification')) && <div style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <FileText size={16} color="#246f68" />
@@ -2396,6 +2444,19 @@ function App() {
                 <>
                   <div style={{ display: 'flex', gap: 10, marginBottom: 15 }}>
                     <button onClick={() => setDetail('')}>← Back to list</button>
+                    {/* SFSO Case Acknowledge Button */}
+                    {isSupervisor && (c.stage === 'New' || c.stage === 'Escalated') && !c.acknowledgedAt && (
+                      <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                        <button
+                          className="primary"
+                          onClick={() => acknowledgeCaseBySfso(c)}
+                          title="Acknowledge case and prepare for FSO assignment"
+                        >
+                          <CheckCircle2 size={13} style={{ display: 'inline', marginRight: 4 }} />
+                          Acknowledge Case
+                        </button>
+                      </div>
+                    )}
                     {/* CRO Direct Case Management Buttons */}
                     {isCro && (
                       <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
@@ -2688,7 +2749,7 @@ function App() {
                         </div>
                       </form>
                     )}
-                    {!isSupervisor && !!c.findings?.length && (
+                    {!isSupervisor && (c.findings || []).some(finding => role !== 'Client' || finding.kind !== 'classification') && (
                       <section style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                           <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2704,7 +2765,7 @@ function App() {
                             📄 View as Printable Report
                           </button>
                         </div>
-                        {c.findings.map((finding, index) => (
+                        {(c.findings || []).filter(finding => role !== 'Client' || finding.kind !== 'classification').map((finding, index) => (
                           <div
                             key={index}
                             className="box"
@@ -2744,7 +2805,7 @@ function App() {
                       </section>
                     )}
                   </div>
-                  <section className="service-activity box" aria-label="Case notes and activity">
+                  {role !== 'Client' && <section className="service-activity box" aria-label="Case notes and activity">
                     <div className="service-activity-actions"><button onClick={() => { setSelected(c.id); go(role === 'FSO' ? cityGroupPage(c.city) : companyGroupPage(c.co)); }}>Send message</button>{isCro && <button type="button" aria-expanded={inlineFollowUpCase === c.id} aria-controls="inline-follow-up" onClick={() => setInlineFollowUpCase(current => current === c.id ? '' : c.id)}>Log notes</button>}</div>
                     {isCro && inlineFollowUpCase === c.id && (
                       <section id="inline-follow-up" className="inline-follow-up log-note-composer" aria-label="Log an internal note">
@@ -2771,7 +2832,7 @@ function App() {
                     {canViewAuditLogs && visibleLogs.filter(entry => entry.id === c.id).length === 0 && <p className="sub">No activity recorded yet.</p>}
                     {visibleLogs.filter(entry => entry.id === c.id).map((entry, index) => <article className="service-event" key={entry.at + '-' + index}><small>{entry.time}</small><b>{entry.user}</b><p>{entry.action}</p></article>)}
                     {(c.followUps || []).map((entry, index) => <article className="service-event" key={'follow-' + index}><small>{new Date(entry.at).toLocaleString()}</small><b>{entry.author}</b><p>{entry.text}</p>{entry.attachments?.map((file, index) => <a className="service-evidence" key={index} href={file.url} download={file.name}>{file.kind}: {file.name}</a>)}</article>)}
-                  </section>
+                  </section>}
                   </div>
                 </>
               ) : intake || page === 'Raise a Case' ? (

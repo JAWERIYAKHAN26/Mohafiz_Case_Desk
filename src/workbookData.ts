@@ -11,6 +11,17 @@ export const workbookSelect = ['source_sha256','source_sheet','source_row','sour
 export const workbookListSelect = 'source_sha256,source_sheet,source_row,reported_date_iso,reported_date,case_id,company,hub,city,issue,location,coordinates,priority,status,total_loss,recovered,assigned_fso,rider_name,rider_phone';
 export const workbookKey = (item: WorkbookCase) => JSON.stringify([item.source_sha256,item.source_sheet,item.source_row]);
 export const sourceText = (value: string | number | null | undefined) => value === null || value === undefined || value === '' ? '—' : String(value);
+export function caseAgeLabel(value: string | null | undefined, now = new Date()): string | undefined {
+  if (!value) return;
+  const datePart = value.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return;
+  const [year, month, day] = datePart.split('-').map(Number);
+  const caseDay = Date.UTC(year, month - 1, day);
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const difference = Math.floor((today - caseDay) / 86_400_000);
+  if (!Number.isFinite(difference) || difference < 0 || new Date(caseDay).toISOString().slice(0, 10) !== datePart) return;
+  return difference === 0 ? 'Today' : difference === 1 ? '1 day ago' : `${difference} days ago`;
+}
 export function safeEvidenceUrl(value: string | null): string | undefined {
   if (!value) return;
   try { const url = new URL(value); if (url.protocol === 'https:' || url.protocol === 'http:') return url.href; } catch { /* Source reference is text, not a navigable URL. */ }

@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LayoutDashboard, BriefcaseBusiness, FileText, Settings, Bell, ChartNoAxesCombined, RefreshCw, LogOut, UserRound, ChevronLeft, ChevronRight, MapPin, Menu, X, Search, Columns3, MessagesSquare, MessageSquareLock } from 'lucide-react';
 import { supabase } from './supabase';
-import { WORKBOOK_SHA, WORKBOOK_PAGE_SIZE, workbookSelect, workbookListSelect, workbookKey, sourceText, workbookPageCsv, type WorkbookCase, type WorkbookProfile, type WorkbookSummary } from './workbookData';
+import { WORKBOOK_SHA, WORKBOOK_PAGE_SIZE, workbookSelect, workbookListSelect, workbookKey, sourceText, workbookPageCsv, caseAgeLabel, type WorkbookCase, type WorkbookProfile, type WorkbookSummary } from './workbookData';
 import './workbook-portal.css';
 import LiveFsoWorkspace from './LiveFsoWorkspace';
 import { workspaceGroups } from './workspaceGroups';
 import LiveGroupChat from './LiveGroupChat';
+import GroupCallInvites from './GroupCallInvites';
 import CaseDetail from './LiveCaseDetail';
 import LiveCaseReport from './LiveCaseReport';
 import LiveLocationModal from './LiveLocationModal';
@@ -18,6 +19,13 @@ const emptyFilters: Filters = { search:'',company:'',city:'',status:'',priority:
 type Activity = { id:string; action:string; actor_name:string; source_sheet:string; source_row:number; created_at:string };
 
 type Options = { companies: string[]; cities: string[]; statuses: string[]; priorities: string[] };
+
+function CompanyMark({company}:{company:string}) {
+  if(company==='Buscaro')return <span className="workbook-company-logo buscaro" aria-hidden="true"><img src="/images/buscaro-logo.svg" alt=""/></span>;
+  if(company==='Daraz')return <span className="workbook-company-logo daraz" aria-hidden="true"><img src="/images/daraz-logo.svg" alt=""/></span>;
+  if(company==='PostEx')return <span className="workbook-company-logo postex" aria-hidden="true"><b>P</b><i/></span>;
+  return <span className="workbook-company-logo other" aria-hidden="true">{company.slice(0,1).toUpperCase()}</span>;
+}
 
 export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { profile: WorkbookProfile; light: boolean; onTheme: (value: boolean)=>void; onLogout: ()=>Promise<void> }) {
   const [page,setPage]=useState<string>(profile.role==='CRO'||profile.role==='CRO Manager'?'dashboard':'cases');
@@ -49,7 +57,39 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
   const [acknowledging,setAcknowledging]=useState<string|null>(null);
   const [notice,setNotice]=useState('');
   const [unread,setUnread]=useState<Record<string,number>>({});
+  const [soundReady,setSoundReady]=useState(false);
+  const ringtoneContext=useRef<AudioContext|null>(null);
   const [visits,setVisits]=useState<Activity[]>([]);
+  useEffect(()=>{
+    const unlock=()=>{
+      try{
+        const context=ringtoneContext.current||(ringtoneContext.current=new AudioContext());
+        void context.resume().then(()=>setSoundReady(true)).catch(()=>setSoundReady(false));
+      }catch{setSoundReady(false);}
+    };
+    document.addEventListener('pointerdown',unlock);
+    document.addEventListener('keydown',unlock);
+    return()=>{document.removeEventListener('pointerdown',unlock);document.removeEventListener('keydown',unlock);void ringtoneContext.current?.close();ringtoneContext.current=null;};
+  },[]);
+  useEffect(()=>{
+    const unreadOutsideOpenChat=Object.entries(unread).some(([key,count])=>count>0&&key!==page);
+    if(!soundReady||!unreadOutsideOpenChat)return;
+    const context=ringtoneContext.current;
+    if(!context)return;
+    const ring=()=>{
+      if(context.state!=='running')return;
+      const start=context.currentTime;
+      for(const [offset,frequency] of [[0,880],[0.2,660],[0.65,880],[0.85,660]] as const){
+        const oscillator=context.createOscillator(),gain=context.createGain();
+        oscillator.type='square';oscillator.frequency.value=frequency;
+        gain.gain.setValueAtTime(0.0001,start+offset);gain.gain.exponentialRampToValueAtTime(0.3,start+offset+0.02);gain.gain.exponentialRampToValueAtTime(0.0001,start+offset+0.18);
+        oscillator.connect(gain);gain.connect(context.destination);oscillator.start(start+offset);oscillator.stop(start+offset+0.19);
+      }
+    };
+    ring();
+    const timer=window.setInterval(ring,2200);
+    return()=>window.clearInterval(timer);
+  },[unread,page,soundReady]);
   useEffect(()=>{
     let alive=true;
     void supabase?.rpc('workspace_unread_groups').then(result=>{if(alive&&!result.error)setUnread(result.data||{});});
@@ -183,12 +223,13 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
     },250);
     return()=>{alive=false;window.clearTimeout(timer);controller.abort();};
   },[filters,pageNumber,revision,profile.email,profile.role,profile.city,profile.company,profile.officerName,page]);
-  const allNav=[['dashboard','Dashboard',LayoutDashboard],['cases',['FSO','Client'].includes(profile.role)?'My Cases':'Case Board',['FSO','Client'].includes(profile.role)?BriefcaseBusiness:Columns3],['reports','Reports',ChartNoAxesCombined]] as const;
-  const primaryNav=allNav.filter(([key])=>profile.role==='FSO'?key==='cases':['Client','SFSO','SOM'].includes(profile.role)?key!=='dashboard':true);
+  const allNav=[['dashboard','Dashboard',LayoutDashboard],['cases',['FSO','Client'].includes(profile.role)?'My Cases':'Case Board',['FSO','Client'].includes(profile.role)?BriefcaseBusiness:Columns3],['reports',profile.role==='Client'?'My Cases':'Reports',ChartNoAxesCombined]] as const;
+  const primaryNav=allNav.filter(([key])=>key!=='reports'&&(profile.role==='FSO'?key==='cases':profile.role==='Client'?false:['SFSO','SOM'].includes(profile.role)?key!=='dashboard':true));
+  const reportsNav=allNav.filter(([key])=>key==='reports');
   const groups=workspaceGroups(profile);
   const group=groups.find(item=>item.key===page);
   const internalUnreadCount=groups.filter(item=>item.kind==='city').reduce((sum,item)=>sum+(unread[item.key]||0),0);
-  const nav=[...primaryNav,...(profile.role==='CRO Manager'?[['audit','Audit Logs',FileText] as const]:[]),...groups.map(item=>[item.key,item.label,item.kind==='city'?MessageSquareLock:MessagesSquare] as const)];
+  const nav=[...primaryNav,...(profile.role==='CRO Manager'?[['audit','Audit Logs',FileText] as const]:[]),...groups.map(item=>[item.key,item.label,item.kind==='city'?MessageSquareLock:MessagesSquare] as const),...reportsNav];
   const mobileNav=profile.role==='FSO'?nav.slice(0,2):nav.slice(0,4);
   const showBoard=page==='cases'&&!['FSO','Client'].includes(profile.role);
   const cities=filters.city?[filters.city]:options.cities.length?options.cities:[...new Set(rows.map(item=>sourceText(item.city)))];
@@ -220,39 +261,28 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
 
   return <>
     {locationItem&&<LiveLocationModal item={locationItem} onClose={()=>setLocationItem(null)}/>}
-    {reportItem&&<LiveCaseReport item={reportItem} onClose={()=>setReportItem(null)}/>}
+    {reportItem&&<LiveCaseReport item={reportItem} profile={profile} onClose={()=>setReportItem(null)}/>}
     {menuOpen&&<button className="mobile-backdrop" aria-label="Close navigation" onClick={()=>setMenuOpen(false)}/>}
     <aside className={menuOpen?'mobile-open':''}><div className="workspace">Mohafiz<button className="workbook-menu-close" aria-label="Close navigation" onClick={()=>setMenuOpen(false)}><X size={18}/></button></div><nav>{nav.map(([key,label,Icon])=><button key={key} className={page===key||(key==='dashboard'&&page==='new')?'active':''} onClick={()=>navigate(key)}><span className="nav-icon"><Icon size={17}/></span><span className="nav-label">{label}</span>{(unread[key]||0)>0&&<span className="nav-unread-badge">{unread[key]}</span>}</button>)}</nav><div className="workbook-sidebar-account"><b>{profile.name}</b><small>{profile.role}{profile.city?` · ${profile.city}`:''}</small></div></aside>
-    <main className="workbook-main"><header>
+    <main className="workbook-main">
+    <section className={"content workbook-content "+(selected?'case-detail-content ':'')+(page==='new'?'workbook-new-content ':'')+(profile.role==='FSO'&&!selected&&!group?'live-field-content':'')}><div className="heading workbook-page-heading">
       <button className="mobile-menu-btn" aria-label="Open navigation" onClick={()=>setMenuOpen(true)}><Menu size={18}/></button>
-      <div className="header-controls"><details className="account-menu" onKeyDown={event=>{
-        if(event.key==='Escape'){event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}
-      }}>
+      <div className="workbook-page-title"><div className="eyebrow" hidden={page==='new'}>{selected?'CASE DETAILS':group?(group.kind==='city'?'CITY OPERATIONS CHAT':'COMMUNICATION'):page==='reports'?'ANALYTICS':page==='dashboard'?'OVERVIEW':showBoard?'CASE MANAGEMENT':'FIELD WORKSPACE'}</div><h1>{title}</h1></div>
+      <div className="workbook-heading-actions">{profile.role==='Client'&&page!=='dashboard'&&page!=='new'&&page!=='intake'&&!selected&&!group&&<button className="primary" onClick={()=>navigate('intake')}>+ Raise a Case</button>}{fromDashboard&&page!=='dashboard'&&!selected&&<button className="workbook-reload" onClick={()=>navigate('dashboard')}>Back to Dashboard</button>}{page==='reports'&&!selected&&<><button className="workbook-reload" aria-label="Reset filters" title="Reset filters" onClick={()=>{setFilters(emptyFilters);setPageNumber(0);}}>Reset filters</button><button className="primary" title={`Download the ${rows.length} records on page ${pageNumber+1} as CSV`} disabled={loading||exporting||!rows.length} onClick={()=>void exportPage()}>{exporting?'Exporting...':'Export CSV'}</button></>}{!['dashboard','new','intake'].includes(page)&&<button className="workbook-reload" aria-label="Reload records" title="Reload records" onClick={()=>setRevision(value=>value+1)} disabled={loading||summaryLoading}><RefreshCw size={14}/></button>}</div>
+      <div className="header-controls"><details className="account-menu" onKeyDown={event=>{if(event.key==='Escape'){event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}}}>
         <summary className="header-avatar" aria-label="Open account options" title="Account"><UserRound size={18}/></summary>
         <button className="account-menu-backdrop" type="button" tabIndex={-1} aria-label="Close account options" onClick={event=>event.currentTarget.closest('details')?.removeAttribute('open')}/>
-        <div className="account-menu-panel">
-          <div className="account-profile">
-            <span className="account-profile-avatar"><UserRound size={36} strokeWidth={1.5}/></span>
-            <b className="account-profile-welcome">Welcome {profile.name}</b>
-            {profile.name!==profile.role&&<span className="account-profile-role">{profile.role}</span>}
-            <small className="account-profile-email">{profile.email}</small>
-          </div>
-          <div className="account-menu-actions">
-            <button type="button" aria-expanded={accountSettingsOpen} aria-controls="live-account-settings" onClick={()=>setAccountSettingsOpen(value=>!value)}><Settings size={18}/>Account Settings</button>
-            {accountSettingsOpen&&<div className="account-settings-fields" id="live-account-settings">
-              <label>Email<input value={profile.email} readOnly/></label>
-              <label>Appearance<select value={light?'light':'dark'} onChange={event=>onTheme(event.target.value==='light')}><option value="light">Light</option><option value="dark">Dark</option></select></label>
-            </div>}
+        <div className="account-menu-panel"><div className="account-profile"><span className="account-profile-avatar"><UserRound size={36} strokeWidth={1.5}/></span><b className="account-profile-welcome">Welcome {profile.name}</b>{profile.name!==profile.role&&<span className="account-profile-role">{profile.role}</span>}<small className="account-profile-email">{profile.email}</small></div>
+          <div className="account-menu-actions"><button type="button" aria-expanded={accountSettingsOpen} aria-controls="live-account-settings" onClick={()=>setAccountSettingsOpen(value=>!value)}><Settings size={18}/>Account Settings</button>
+            {accountSettingsOpen&&<div className="account-settings-fields" id="live-account-settings"><label>Email<input value={profile.email} readOnly/></label><label>Appearance<select value={light?'light':'dark'} onChange={event=>onTheme(event.target.value==='light')}><option value="light">Light</option><option value="dark">Dark</option></select></label></div>}
             <button type="button" onClick={event=>{event.currentTarget.closest('details')?.removeAttribute('open');openUpdates();}}><Bell size={18}/>Notifications{(profile.role==='Client'?(counters?.unread_messages||0):internalUnreadCount)>0&&<span className="account-notification-count">{profile.role==='Client'?counters?.unread_messages:internalUnreadCount}</span>}</button>
-            <button type="button" className="account-logout" onClick={()=>{setLogoutError('');void onLogout().catch(()=>setLogoutError('Could not sign out. Please retry.'));}}><LogOut size={16}/>Log out</button>
-            {logoutError&&<p className="workbook-error" role="alert">{logoutError}</p>}
+            <button type="button" className="account-logout" onClick={()=>{setLogoutError('');void onLogout().catch(()=>setLogoutError('Could not sign out. Please retry.'));}}><LogOut size={16}/>Log out</button>{logoutError&&<p className="workbook-error" role="alert">{logoutError}</p>}
           </div>
         </div>
       </details></div>
-    </header>
-    <section className={"content workbook-content "+(selected?'case-detail-content ':'')+(page==='new'?'workbook-new-content ':'')+(profile.role==='FSO'&&!selected&&!group?'live-field-content':'')}><div className="heading"><div><div className="eyebrow" hidden={page==='new'}>{selected?'CASE DETAILS':group?(group.kind==='city'?'CITY OPERATIONS CHAT':'COMMUNICATION'):page==='reports'?'ANALYTICS':page==='dashboard'?'OVERVIEW':showBoard?'CASE MANAGEMENT':'FIELD WORKSPACE'}</div><h1>{title}</h1></div><div className="workbook-heading-actions">{profile.role==='Client'&&page!=='dashboard'&&page!=='new'&&page!=='intake'&&!selected&&!group&&<button className="primary" onClick={()=>navigate('intake')}>+ Raise a Case</button>}{fromDashboard&&page!=='dashboard'&&!selected&&<button className="workbook-reload" onClick={()=>navigate('dashboard')}>Back to Dashboard</button>}{page==='reports'&&!selected&&<><button className="workbook-reload" aria-label="Reset filters" title="Reset filters" onClick={()=>{setFilters(emptyFilters);setPageNumber(0);}}>Reset filters</button><button className="primary" title={`Download the ${rows.length} records on page ${pageNumber+1} as CSV`} disabled={loading||exporting||!rows.length} onClick={()=>void exportPage()}>{exporting?'Exporting...':'Export CSV'}</button></>}{!['dashboard','new','intake'].includes(page)&&<button className="workbook-reload" aria-label="Reload records" title="Reload records" onClick={()=>setRevision(value=>value+1)} disabled={loading||summaryLoading}><RefreshCw size={14}/></button>}</div></div>
+    </div>
       {notice&&<div className="box live-notice" role="status">{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={14}/></button></div>}{setupError&&<div className="workbook-error" role="alert">{setupError}</div>}{counterError&&<div className="workbook-error" role="alert">Workflow/chat setup: {counterError}</div>}
-      {page==='audit'&&profile.role==='CRO Manager'?<LiveAuditLogs revision={revision}/>:page==='intake'&&profile.role==='Client'?<LiveCaseIntake profile={profile} companies={options.companies} cities={options.cities} onCancel={()=>navigate('cases')} onCreated={id=>{setNotice(`Case raised successfully! Generated Case ID: ${id}. Sent to CRO for acknowledgement.`);setFilters(emptyFilters);setPageNumber(0);setRevision(value=>value+1);navigate(profile.role==='Client'?'cases':'new');}}/>:selected?<CaseDetail key={workbookKey(selected)} item={selected} profile={profile} onChange={()=>{setCounterRevision(value=>value+1);setRevision(value=>value+1);}} onBack={()=>setSelected(null)} onConversation={item=>{
+      {page==='audit'&&profile.role==='CRO Manager'?<LiveAuditLogs revision={revision}/>:page==='intake'&&profile.role==='Client'?<LiveCaseIntake profile={profile} companies={options.companies} cities={options.cities} onCancel={()=>navigate('cases')} onCreated={id=>{setNotice(`Case ${id} raised and forwarded to your SFSO team for acknowledgement.`);setFilters(emptyFilters);setPageNumber(0);setRevision(value=>value+1);navigate(profile.role==='Client'?'cases':'new');}}/>:selected?<CaseDetail key={workbookKey(selected)} item={selected} profile={profile} onChange={()=>{setCounterRevision(value=>value+1);setRevision(value=>value+1);}} onBack={()=>setSelected(null)} onConversation={item=>{
         const target=groups.find(group=>profile.role==='FSO'?group.kind==='city'&&group.value===(item.city==='Rawalpindi'?'Islamabad':item.city):group.kind==='company'&&group.value===item.company)||groups.find(group=>group.kind==='city'&&group.value===(item.city==='Rawalpindi'?'Islamabad':item.city));
         if(target){navigate(target.key);setConversationCase(item);}else setNotice('No conversation group is configured for this case.');
       }}/>:page==='updates'?<section className="box"><h2>Updates to review</h2><button onClick={()=>{setFilters({...emptyFilters,status:'__review__'});setPageNumber(0);navigate('cases',true);}}>Field findings awaiting review ({counters?.reports_to_review??0})</button><h3>Group messages ({counters?.unread_messages??0} unread)</h3><div className="live-case-action-buttons">{groups.map(item=><button key={item.key} onClick={()=>navigate(item.key,true)}>{item.label}</button>)}</div></section>:group?<LiveGroupChat key={group.key} onOpenCase={setSelected} profile={profile} group={group} caseContext={conversationCase} onRead={()=>setCounterRevision(value=>value+1)}/>:<>
@@ -274,12 +304,13 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
         {page!=='new'&&caseFilters}
         <div className="workbook-results" hidden={page==='new'}><span role="status">{loading?'Loading cases…':`${total.toLocaleString()} matching cases`}</span><small>{page==='reports'?`Export CSV includes this page (${rows.length} records)`:'Select a case to view details and actions'}</small></div>
         {error&&<div role="alert" className="workbook-error">Could not load cases. {error}<button onClick={()=>setRevision(value=>value+1)}>Retry</button></div>}
-        {page==='new'?<div className="tw"><table className="new-cases-table workbook-table"><thead><tr><th colSpan={7} className="new-cases-filter-cell">{caseFilters}</th></tr><tr><th>Case ID</th><th>Company &amp; Hub</th><th>City</th><th>Issue</th><th>Exact Location</th><th>Priority</th><th>Actions</th></tr></thead><tbody>{rows.map(item=><tr key={workbookKey(item)}><td><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><small>{sourceText(item.reported_date)}</small></td><td><b>{sourceText(item.company)}</b><small>{sourceText(item.hub)}</small></td><td><b>{sourceText(item.city)}</b></td><td><b>{sourceText(item.issue)}</b><small>PKR {sourceText(item.total_loss)}</small></td><td><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button></td><td><span className={'workbook-priority priority-'+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span></td><td><button className="primary" disabled={acknowledging!==null} onClick={()=>void acknowledge(item)}>{acknowledging===workbookKey(item)?'Saving...':'Acknowledge'}</button></td></tr>)}</tbody></table>{!loading&&!rows.length&&!error&&<div className="empty">No new intake cases awaiting review.</div>}</div>:showBoard?<div className="board city-board">{cities.map(city=><section className="column workbook-city-column" key={city}><h2>{city}<small>{rows.filter(item=>sourceText(item.city)===city).length} on this page</small></h2>{!rows.some(item=>sourceText(item.city)===city)&&<p className="city-empty">No cases match this status on this page.</p>}{rows.filter(item=>sourceText(item.city)===city).map(item=><article className="card workbook-board-card" key={workbookKey(item)}><div className="workbook-board-meta"><span>{sourceText(item.company)}</span><span className={"workbook-priority priority-"+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span><span className={`workbook-status ${statusClass(item.status)}`}>{workflowStage(item)||(item.status==='Pending'?'New':sourceText(item.status))}</span></div><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><p>{sourceText(item.issue)}</p><small>{sourceText(item.city)} / {item.assigned_fso||'Unassigned'}</small><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button></article>)}</section>)}</div>:<div className="tw"><table className="reports-table workbook-table"><thead><tr><th>Case ID</th><th>Company & Hub</th><th>City</th><th>Issue</th><th>Exact location</th><th>Priority</th><th>Status</th><th>Total loss</th><th>Recovered</th>{page==='reports'&&<th>Official report</th>}</tr></thead><tbody>{rows.map(item=><tr key={workbookKey(item)}><td><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><small>{sourceText(item.reported_date)}</small><small>Source row {item.source_row}</small></td><td><b>{sourceText(item.company)}</b><small>{sourceText(item.hub)}</small></td><td>{sourceText(item.city)}</td><td>{sourceText(item.issue)}</td><td><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button></td><td><span className={"workbook-priority priority-"+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span></td><td><span className={`workbook-status ${statusClass(item.status)}`}>{workflowStage(item)||(item.status==='Pending'?'New':sourceText(item.status))}</span></td><td>{sourceText(item.total_loss)}</td><td>{sourceText(item.recovered)}</td>{page==='reports'&&<td><button className="link live-report-icon" aria-label={`Generate report for ${sourceText(item.case_id)}, source row ${item.source_row}`} title="Generate report" onClick={()=>setReportItem(item)}><FileText size={18}/></button></td>}</tr>)}</tbody></table>{!loading&&!error&&!rows.length&&<div className="empty">{profile.role==='FSO'?`No cases are assigned to ${profile.officerName} in ${profile.city} matching these filters.`:'No cases match your filters and assigned access.'}</div>}</div>}
+        {page==='new'?<div className="tw"><table className="new-cases-table workbook-table"><thead><tr><th colSpan={7} className="new-cases-filter-cell">{caseFilters}</th></tr><tr><th>Case ID</th><th>Company &amp; Hub</th><th>City</th><th>Issue</th><th>Exact Location</th><th>Priority</th><th>Actions</th></tr></thead><tbody>{rows.map(item=><tr key={workbookKey(item)}><td><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><small>{sourceText(item.reported_date)}</small></td><td><b>{sourceText(item.company)}</b><small>{sourceText(item.hub)}</small></td><td><b>{sourceText(item.city)}</b></td><td><b>{sourceText(item.issue)}</b><small>PKR {sourceText(item.total_loss)}</small></td><td><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button></td><td><span className={'workbook-priority priority-'+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span></td><td><button className="primary" disabled={acknowledging!==null} onClick={()=>void acknowledge(item)}>{acknowledging===workbookKey(item)?'Saving...':'Acknowledge'}</button></td></tr>)}</tbody></table>{!loading&&!rows.length&&!error&&<div className="empty">No new intake cases awaiting review.</div>}</div>:showBoard?<div className="board city-board">{cities.map(city=><section className="column workbook-city-column" key={city}><h2>{city}<small>{rows.filter(item=>sourceText(item.city)===city).length} on this page</small></h2>{!rows.some(item=>sourceText(item.city)===city)&&<p className="city-empty">No cases match this status on this page.</p>}{rows.filter(item=>sourceText(item.city)===city).map(item=><article className="card workbook-board-card" key={workbookKey(item)}><div className="workbook-board-meta"><span className="workbook-company-mark"><CompanyMark company={sourceText(item.company)}/>{sourceText(item.company)}</span><span className={"workbook-priority priority-"+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span><span className="workbook-status">{workflowStage(item)}</span></div><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><p>{sourceText(item.issue)}</p><small>{sourceText(item.city)} / {item.assigned_fso||'Unassigned'}</small><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button><small className="workbook-case-age">{caseAgeLabel(item.reported_date_iso as string|null|undefined) || 'Age unavailable'}</small></article>)}</section>)}</div>:<div className="tw"><table className="reports-table workbook-table"><thead><tr><th>Case ID</th><th>Company & Hub</th><th>City</th><th>Issue</th><th>Exact location</th><th>Priority</th><th>Status</th><th>Total loss</th><th>Recovered</th>{page==='reports'&&<th>Official report</th>}</tr></thead><tbody>{rows.map(item=><tr key={workbookKey(item)}><td><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><small>{sourceText(item.reported_date)}</small><small>Source row {item.source_row}</small></td><td><b>{sourceText(item.company)}</b><small>{sourceText(item.hub)}</small></td><td>{sourceText(item.city)}</td><td>{sourceText(item.issue)}</td><td><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button></td><td><span className={"workbook-priority priority-"+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span></td><td><span className={`workbook-status ${statusClass(item.status)}`}>{workflowStage(item)||(item.status==='Pending'?'New':sourceText(item.status))}</span></td><td>{sourceText(item.total_loss)}</td><td>{sourceText(item.recovered)}</td>{page==='reports'&&<td><button className="link live-report-icon" aria-label={`Generate report for ${sourceText(item.case_id)}, source row ${item.source_row}`} title="Generate report" onClick={()=>setReportItem(item)}><FileText size={18}/></button></td>}</tr>)}</tbody></table>{!loading&&!error&&!rows.length&&<div className="empty">{profile.role==='FSO'?`No cases are assigned to ${profile.officerName} in ${profile.city} matching these filters.`:'No cases match your filters and assigned access.'}</div>}</div>}
         </>}
         <div className={"workbook-pagination "+(profile.role==='FSO'?'live-field-pagination':'')}><small>{total?`${pageNumber*WORKBOOK_PAGE_SIZE+1}–${Math.min((pageNumber+1)*WORKBOOK_PAGE_SIZE,total)} of ${total.toLocaleString()}`:'0 cases'}</small><button disabled={loading||pageNumber===0} onClick={()=>setPageNumber(value=>value-1)}><ChevronLeft size={15}/>Previous</button><button disabled={loading||(pageNumber+1)*WORKBOOK_PAGE_SIZE>=total} onClick={()=>setPageNumber(value=>value+1)}>Next<ChevronRight size={15}/></button></div>
         </>}
       </>}
     </section></main>
     <nav className="mobile-bottom-bar" aria-label="Mobile navigation">{mobileNav.map(([key,label,Icon])=><button key={key} className={'mobile-bottom-item '+(page===key||(key==='dashboard'&&page==='new')?'active':'')} onClick={()=>navigate(key)}><Icon size={17}/><span>{label}</span></button>)}</nav>
+    <GroupCallInvites profile={profile}/>
   </>;
 }

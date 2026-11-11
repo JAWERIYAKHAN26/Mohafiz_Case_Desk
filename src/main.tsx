@@ -523,6 +523,9 @@ function App() {
   const [detail, setDetail] = useState('');
   const [boardCity, setBoardCity] = useState('');
   const [boardStatus, setBoardStatus] = useState('');
+  const [boardSearch, setBoardSearch] = useState('');
+  const [boardCompany, setBoardCompany] = useState('');
+  const [boardIssue, setBoardIssue] = useState('');
   const [inlineFollowUpCase, setInlineFollowUpCase] = useState('');
   const [findingsCaseId, setFindingsCaseId] = useState('');
   const [findingsDraft, setFindingsDraft] = useState('');
@@ -2861,10 +2864,6 @@ function App() {
                           <span>To acknowledge</span>
                           <b>{cases.filter(c => c.stage === 'New').length}</b>
                         </button>
-                        <button className="stat" onClick={() => { setBoardCity(''); setBoardStatus('Pending'); go('Case Board', true); }}>
-                          <span>Pending cases</span>
-                          <b>{cases.filter(c => c.stage !== 'Closed' && (c.isQueued || c.stage !== 'In progress')).length}</b>
-                        </button>
                         <button className="stat" onClick={() => openUnreadInternalChat(true)}>
                           <span>Updates to review</span>
                           <b>{internalUnreadCount}</b>
@@ -3420,24 +3419,52 @@ function App() {
                     </>
                   )}
 
-                  {/* Page: Case Board (Filtered by Role & City for SFSO) */}
+                  {/* Page: Case Board */}
                   {page === 'Case Board' && (
                     <>
-                      <div className="city-board-filters">
-                        <label><span className="sr-only">City</span><select value={boardCity} onChange={e => setBoardCity(e.target.value)}><option value="" disabled hidden>City</option>{Array.from(new Set(visible.map(item => item.city))).sort().map(city => <option key={city}>{city}</option>)}</select></label>
-                        <label><span className="sr-only">Status</span><select value={boardStatus} onChange={e => setBoardStatus(e.target.value)}><option value="" disabled hidden>Status</option>{['Open', 'Pending', 'Closed', 'Hold', 'In progress'].map(status => <option key={status}>{status}</option>)}</select></label>
+                      <div className="stats case-board-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 16 }}>
+                        <button className="stat" type="button" onClick={() => setBoardStatus(boardStatus === 'New' ? '' : 'New')}>
+                          <span>To acknowledge</span>
+                          <b>{visible.filter(c => c.stage === 'New').length}</b>
+                        </button>
+                        <button className="stat" type="button" onClick={() => setBoardStatus(boardStatus === 'In progress' ? '' : 'In progress')}>
+                          <span>In progress</span>
+                          <b>{visible.filter(c => ['In progress', 'Acknowledged', 'Escalated', 'Hold'].includes(c.stage)).length}</b>
+                        </button>
+                        <button className="stat" type="button" onClick={() => setBoardStatus(boardStatus === 'Closed' ? '' : 'Closed')}>
+                          <span>Closed</span>
+                          <b>{visible.filter(c => c.stage === 'Closed').length}</b>
+                        </button>
                       </div>
-                      <div className="board city-board">
-                        {Array.from(new Set(visible.map(item => item.city))).sort().filter(city => !boardCity || city === boardCity).map(city => {
-                          const cityCases = visible.filter(item => item.city === city && (!boardStatus || (boardStatus === 'Open' ? item.stage !== 'Closed' : boardStatus === 'Pending' ? item.stage !== 'Closed' && (item.isQueued || item.stage !== 'In progress') : item.stage === boardStatus)));
+                      <div className="city-board-filters">
+                        <label><span className="sr-only">Search Case ID</span><input placeholder="Search Case ID…" value={boardSearch} onChange={e => setBoardSearch(e.target.value)} /></label>
+                        <label><span className="sr-only">Company</span><select value={boardCompany} onChange={e => setBoardCompany(e.target.value)}><option value="">Company</option>{companies.map(co => <option key={co} value={co}>{co}</option>)}</select></label>
+                        <label><span className="sr-only">City</span><select value={boardCity} onChange={e => setBoardCity(e.target.value)}><option value="">City</option>{Array.from(new Set(visible.map(item => item.city))).sort().map(city => <option key={city} value={city}>{city}</option>)}</select></label>
+                        <label><span className="sr-only">Issue</span><select value={boardIssue} onChange={e => setBoardIssue(e.target.value)}><option value="">Issue</option>{Array.from(new Set(visible.map(item => item.issue))).filter(Boolean).sort().map(iss => <option key={iss} value={iss}>{iss}</option>)}</select></label>
+                        <label><span className="sr-only">Status</span><select value={boardStatus} onChange={e => setBoardStatus(e.target.value)}><option value="">Status</option>{['New', 'Acknowledged', 'Escalated', 'In progress', 'Hold', 'Closed'].map(status => <option key={status} value={status}>{status}</option>)}</select></label>
+                      </div>
+                      <div className="board stage-board" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(280px, 1fr))', gap: 14 }}>
+                        {[
+                          { key: 'To acknowledge', stages: ['New'] },
+                          { key: 'In progress', stages: ['In progress', 'Acknowledged', 'Escalated', 'Hold'] },
+                          { key: 'Closed', stages: ['Closed'] }
+                        ].map(col => {
+                          const colCases = visible.filter(c =>
+                            col.stages.includes(c.stage) &&
+                            (!boardCity || c.city === boardCity) &&
+                            (!boardCompany || c.co === boardCompany) &&
+                            (!boardIssue || c.issue === boardIssue) &&
+                            (!boardStatus || c.stage === boardStatus) &&
+                            (!boardSearch || c.id.toLowerCase().includes(boardSearch.toLowerCase()))
+                          );
                           return (
-                          <section className="column" key={city}>
-                            <h3>
-                              {city}
-                              <span>{cityCases.length}</span>
-                            </h3>
-                            {cityCases.length === 0 && <p className="city-empty">No cases match this status.</p>}
-                            {cityCases.map(c => (
+                            <section className="column" key={col.key}>
+                              <h3>
+                                {col.key}
+                                <span>{colCases.length}</span>
+                              </h3>
+                              {colCases.length === 0 && <p className="city-empty">No cases in this stage.</p>}
+                              {colCases.map(c => (
                                 <button
                                   className="card"
                                   key={c.id}
@@ -3477,8 +3504,9 @@ function App() {
                                   )}
                                 </button>
                               ))}
-                          </section>
-                        ); })}
+                            </section>
+                          );
+                        })}
                       </div>
                     </>
                   )}
@@ -3823,12 +3851,11 @@ function App() {
                   {/* Page: Reports */}
                   {page === 'Reports' && (
                     <div className="reports-page">
-                      <div className="bar reports-filters" style={{ '--report-filter-count': 5 + Number(role !== 'Client') + Number(!isSupervisor) } as React.CSSProperties}>
+                      <div className="bar reports-filters" style={{ '--report-filter-count': 6 + Number(role !== 'Client') + Number(!isSupervisor) } as React.CSSProperties}>
                         <div className="reports-filter-toolbar">
                           <span>From</span>
                           <span>To</span>
                           <div className="reports-filter-actions">
-                            <button className="reports-reset" type="button" aria-label="Reset report filters" title="Reset filters" onClick={() => setF({})}><RotateCcw size={16} /></button>
                             <button className="primary reports-export" onClick={exportCsv}>Export CSV</button>
                           </div>
                         </div>
@@ -3851,6 +3878,7 @@ function App() {
                         </label>
                         {role !== 'Client' && filter('co', 'Company', companies, true)}
                         {!isSupervisor && filter('city', 'City', cities, true)}
+                        {filter('issue', 'Issue', Array.from(new Set(cases.map(c => c.issue))).filter(Boolean).sort(), true)}
                         {filter('stage', 'Status', stages, true)}
                         {filter('cls', 'Classification', ['Genuine', 'Negligence', 'Fraud'], true)}
                         <label>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { LayoutDashboard, BriefcaseBusiness, FileText, Settings, Bell, ChartNoAxesCombined, RefreshCw, LogOut, UserRound, ChevronLeft, ChevronRight, MapPin, Menu, X, Search, Columns3, MessagesSquare, MessageSquareLock } from 'lucide-react';
 import { supabase } from './supabase';
 import { WORKBOOK_SHA, WORKBOOK_PAGE_SIZE, workbookSelect, workbookListSelect, workbookKey, sourceText, workbookPageCsv, caseAgeLabel, type WorkbookCase, type WorkbookProfile, type WorkbookSummary } from './workbookData';
+import { workbookIssueRules } from './workbookRules';
 import './workbook-portal.css';
 import LiveFsoWorkspace from './LiveFsoWorkspace';
 import { workspaceGroups } from './workspaceGroups';
@@ -15,11 +16,31 @@ import LiveCaseIntake from './LiveCaseIntake';
 import LiveAuditLogs from './LiveAuditLogs';
 import {databaseMessage,workflowStage,type WorkflowCounters} from './liveOperations';
 
-type Filters = { search: string; company: string; city: string; status: string; priority:string; from: string; to: string };
-const emptyFilters: Filters = { search:'',company:'',city:'',status:'',priority:'',from:'',to:'' };
+type Filters = { search: string; company: string; city: string; status: string; priority: string; issue: string; from: string; to: string };
+const emptyFilters: Filters = { search:'',company:'',city:'',status:'',priority:'',issue:'',from:'',to:'' };
 type Activity = { id:string; action:string; actor_name:string; source_sheet:string; source_row:number; created_at:string };
 
-type Options = { companies: string[]; cities: string[]; statuses: string[]; priorities: string[] };
+type Options = { companies: string[]; cities: string[]; statuses: string[]; priorities: string[]; issues: string[] };
+
+const defaultIssues = Array.from(new Set(workbookIssueRules.map(item => item.issue))).sort();
+
+export const BOARD_STAGES = ['To acknowledge', 'In progress', 'Closed'] as const;
+export type BoardStage = typeof BOARD_STAGES[number];
+
+export function getCaseBoardStage(item: WorkbookCase): BoardStage {
+  const stage = workflowStage(item);
+  const status = item.status;
+  if (stage === 'Closed' || status === 'Closed') {
+    return 'Closed';
+  }
+  if (stage === 'New' || (!stage && status === 'Pending')) {
+    return 'To acknowledge';
+  }
+  if (['In progress', 'Arrived', 'Submitted', 'Reviewed', 'Escalated', 'Acknowledged', 'Hold'].includes(stage || '') || status === 'In progress' || status === 'Arrived') {
+    return 'In progress';
+  }
+  return 'To acknowledge';
+}
 
 function CompanyMark({company}:{company:string}) {
   if(company==='Buscaro')return <span className="workbook-company-logo buscaro" aria-hidden="true"><img src="/images/buscaro-logo.svg" alt=""/></span>;
@@ -29,14 +50,14 @@ function CompanyMark({company}:{company:string}) {
 }
 
 export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { profile: WorkbookProfile; light: boolean; onTheme: (value: boolean)=>void; onLogout: ()=>Promise<void> }) {
-  const [page,setPage]=useState<string>(profile.role==='CRO'||profile.role==='CRO Manager'?'dashboard':'cases');
+  const [page,setPage]=useState<string>(profile.role==='CRO'||profile.role==='CRO Manager'?'dashboard':profile.role==='Client'?'reports':'cases');
   const [filters,setFilters]=useState<Filters>(emptyFilters);
   const [fromDashboard,setFromDashboard]=useState(false);
   const [pageNumber,setPageNumber]=useState(0);
   const [rows,setRows]=useState<WorkbookCase[]>([]);
   const [total,setTotal]=useState(0);
   const [summary,setSummary]=useState<WorkbookSummary|null>(null);
-  const [options,setOptions]=useState<Options>({companies:[],cities:[],statuses:[],priorities:[]});
+  const [options,setOptions]=useState<Options>({companies:[],cities:[],statuses:[],priorities:[],issues:defaultIssues});
   const [selected,setSelected]=useState<WorkbookCase|null>(null);
   const [conversationCase,setConversationCase]=useState<WorkbookCase|null>(null);
   const [directCallsOpen,setDirectCallsOpen]=useState(false);
@@ -175,8 +196,16 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
       };
       if(summaryResult.status==='fulfilled'&&!summaryResult.value.error)setSummary(summaryResult.value.data as WorkbookSummary);
       else{setSummary(null);failures.push('Dashboard totals: '+describeFailure(summaryResult));}
-      if(optionsResult.status==='fulfilled'&&!optionsResult.value.error){const data=optionsResult.value.data as Options; setOptions({companies:[...data.companies].sort(),cities:[...data.cities].sort(),statuses:[...data.statuses].sort(),priorities:[...data.priorities].sort()});}
-      else failures.push('Filter options: '+describeFailure(optionsResult));
+      if(optionsResult.status==='fulfilled'&&!optionsResult.value.error){
+        const data=optionsResult.value.data as Partial<Options>;
+        setOptions({
+          companies:[...(data.companies||[])].sort(),
+          cities:[...(data.cities||[])].sort(),
+          statuses:[...(data.statuses||[])].sort(),
+          priorities:[...(data.priorities||[])].sort(),
+          issues:[...new Set([...(data.issues||[]),...defaultIssues])].sort()
+        });
+      } else failures.push('Filter options: '+describeFailure(optionsResult));
       setSetupError(failures.join(' | '));
       setSummaryLoading(false);
     })().catch(()=>{if(alive){setSetupError('Could not connect to the database. Please retry.');setSummaryLoading(false);}});
@@ -191,10 +220,13 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
           if(!supabase)throw new Error('Database connection is unavailable.');
           const effective=await supabase.rpc('desk_case_list',{p_sha:WORKBOOK_SHA,p_filters:{...filters,status:page==='new'?'__to_ack__':filters.status},p_page:pageNumber,p_size:WORKBOOK_PAGE_SIZE}).abortSignal(controller.signal);
           if(!effective.error){
-            if(alive){const data=effective.data as {rows:WorkbookCase[];total:number};setRows(data.rows);setTotal(data.total);}
-            return;
+            const data=effective.data as {rows:WorkbookCase[];total:number};
+            if(!filters.issue||data.rows.length===0||data.rows.every(r=>sourceText(r.issue)===filters.issue)){
+              if(alive){setRows(data.rows);setTotal(data.total);}
+              return;
+            }
           }
-          if(!['PGRST202','42883'].includes(effective.error.code))throw effective.error;
+          if(effective.error&&!['PGRST202','42883'].includes(effective.error.code))throw effective.error;
           const projection=page==='new'?workbookListSelect+',case_workflow()':filters.status==='__active__'||filters.status==='__review__'?workbookListSelect+',case_workflow!inner(stage)':filters.status==='__to_ack__'?workbookListSelect+',case_workflow()':workbookListSelect+',case_workflow(stage)';
           let query=supabase.from('workbook_import_cases').select(projection,{count:'exact'}).eq('source_sha256',WORKBOOK_SHA);
           // Explicit coverage predicates help PostgreSQL narrow the query; RLS remains authoritative.
@@ -204,6 +236,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
           if(filters.company)query=query.eq('company',filters.company);
           if(filters.city)query=query.eq('city',filters.city);
           if(filters.priority)query=query.eq('priority',filters.priority);
+          if(filters.issue)query=query.eq('issue',filters.issue);
           if(page==='new')query=query.is('case_workflow',null).eq('status','Pending');
           else if(filters.status==='__active__')query=query.in('case_workflow.stage',['In progress','Arrived','Submitted','Reviewed']);
           else if(filters.status==='__review__')query=query.eq('case_workflow.stage','Submitted');
@@ -234,7 +267,6 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
   const nav=[...primaryNav,...(profile.role==='CRO Manager'?[['audit','Audit Logs',FileText] as const]:[]),...groups.map(item=>[item.key,item.label,item.kind==='city'?MessageSquareLock:MessagesSquare] as const),...reportsNav];
   const mobileNav=profile.role==='FSO'?nav.slice(0,2):nav.slice(0,3);
   const showBoard=page==='cases'&&!['FSO','Client'].includes(profile.role);
-  const cities=filters.city?[filters.city]:options.cities.length?options.cities:[...new Set(rows.map(item=>sourceText(item.city)))];
   const title=page==='intake'?'Raise a Case':selected?`Case ${sourceText(selected.case_id)}`:(page==='updates'?'Updates to review':page==='new'?'New Cases':nav.find(item=>item[0]===page)?.[1])||'Cases';
   const statusClass=(status:unknown)=>status==='Closed'?'resolved':status==='Pending'?'waiting':'neutral';
   async function exportPage(){
@@ -254,11 +286,11 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
   }
 
   const caseFilters=(<div className="box workbook-filters"><label className="workbook-search"><span className="sr-only">Search Case ID</span><Search size={15}/><input type="search" placeholder="Search Case ID…" value={filters.search} onChange={event=>filter('search',event.target.value)}/></label>
-          {profile.role!=='Client'&&<select aria-label="Company" value={filters.company} onChange={event=>filter('company',event.target.value)}><option value="">Company</option>{options.companies.map(value=><option key={value}>{value}</option>)}</select>}
-          {!['FSO','SFSO','SOM'].includes(profile.role)&&<select aria-label="City" value={filters.city} onChange={event=>filter('city',event.target.value)}><option value="">City</option>{options.cities.map(value=><option key={value}>{value}</option>)}</select>}
+          {profile.role!=='Client'&&<select aria-label="Company" value={filters.company} onChange={event=>filter('company',event.target.value)}><option value="">Company</option>{options.companies.map(value=><option key={value} value={value}>{value}</option>)}</select>}
+          {!['FSO','SFSO','SOM'].includes(profile.role)&&<select aria-label="City" value={filters.city} onChange={event=>filter('city',event.target.value)}><option value="">City</option>{options.cities.map(value=><option key={value} value={value}>{value}</option>)}</select>}
+          <select aria-label="Issue" value={filters.issue} onChange={event=>filter('issue',event.target.value)}><option value="">Issue</option>{options.issues.map(value=><option key={value} value={value}>{value}</option>)}</select>
           {page==='new'?<select aria-label="Priority" value={filters.priority} onChange={event=>filter('priority',event.target.value)}><option value="">Priority</option>{options.priorities.map(value=><option key={value}>{value}</option>)}</select>:<select aria-label="Status" value={filters.status} onChange={event=>filter('status',event.target.value)}><option value="">Status</option>{options.statuses.map(value=><option key={value}>{value}</option>)}<option value="__blank__">Not recorded</option><option value="__to_ack__">To acknowledge</option><option value="__active__">In progress</option><option value="__review__">Findings to review</option></select>}
           {page==='reports'&&<><label>From<input type="date" value={filters.from} onChange={event=>filter('from',event.target.value)}/></label><label>To<input type="date" min={filters.from} value={filters.to} onChange={event=>filter('to',event.target.value)}/></label></>}
-          {page!=='reports'&&<button aria-label="Reset filters" title="Reset filters" onClick={()=>{setFilters(emptyFilters);setPageNumber(0);}}>Reset filters</button>}
         </div>);
 
   return <GroupCallProvider profile={profile} light={light}>
@@ -271,7 +303,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
     <section className={"content workbook-content "+(selected?'case-detail-content ':'')+(page==='new'?'workbook-new-content ':'')+(profile.role==='FSO'&&!selected&&!group?'live-field-content':'')}><div className="heading workbook-page-heading">
       <button className="mobile-menu-btn" aria-label="Open navigation" onClick={()=>setMenuOpen(true)}><Menu size={18}/></button>
       <div className="workbook-page-title"><div className="eyebrow" hidden={page==='new'}>{selected?'CASE DETAILS':group?(group.kind==='city'?'CITY OPERATIONS CHAT':'COMMUNICATION'):page==='reports'?'ANALYTICS':page==='dashboard'?'OVERVIEW':showBoard?'CASE MANAGEMENT':'FIELD WORKSPACE'}</div><h1>{title}</h1></div>
-      <div className="workbook-heading-actions">{profile.role==='Client'&&page!=='dashboard'&&page!=='new'&&page!=='intake'&&!selected&&!group&&<button className="primary" onClick={()=>navigate('intake')}>+ Raise a Case</button>}{fromDashboard&&page!=='dashboard'&&!selected&&<button className="workbook-reload" onClick={()=>navigate('dashboard')}>Back to Dashboard</button>}{page==='reports'&&!selected&&<><button className="workbook-reload" aria-label="Reset filters" title="Reset filters" onClick={()=>{setFilters(emptyFilters);setPageNumber(0);}}>Reset filters</button><button className="primary" title={`Download the ${rows.length} records on page ${pageNumber+1} as CSV`} disabled={loading||exporting||!rows.length} onClick={()=>void exportPage()}>{exporting?'Exporting...':'Export CSV'}</button></>}{!['dashboard','new','intake'].includes(page)&&<button className="workbook-reload" aria-label="Reload records" title="Reload records" onClick={()=>setRevision(value=>value+1)} disabled={loading||summaryLoading}><RefreshCw size={14}/></button>}</div>
+      <div className="workbook-heading-actions">{profile.role==='Client'&&page!=='dashboard'&&page!=='new'&&page!=='intake'&&!selected&&!group&&<button className="primary" onClick={()=>navigate('intake')}>+ Raise a Case</button>}{fromDashboard&&page!=='dashboard'&&!selected&&<button className="workbook-reload" onClick={()=>navigate('dashboard')}>Back to Dashboard</button>}{page==='reports'&&!selected&&<button className="primary" title={`Download the ${rows.length} records on page ${pageNumber+1} as CSV`} disabled={loading||exporting||!rows.length} onClick={()=>void exportPage()}>{exporting?'Exporting...':'Export CSV'}</button>}{!['dashboard','new','intake'].includes(page)&&<button className="workbook-reload" aria-label="Reload records" title="Reload records" onClick={()=>setRevision(value=>value+1)} disabled={loading||summaryLoading}><RefreshCw size={14}/></button>}</div>
       <div className="header-controls"><details className="account-menu" onKeyDown={event=>{if(event.key==='Escape'){event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}}}>
         <summary className="header-avatar" aria-label="Open account options" title="Account"><UserRound size={18}/></summary>
         <button className="account-menu-backdrop" type="button" tabIndex={-1} aria-label="Close account options" onClick={event=>event.currentTarget.closest('details')?.removeAttribute('open')}/>
@@ -285,14 +317,13 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
       </details></div>
     </div>
       {notice&&<div className="box live-notice" role="status">{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={14}/></button></div>}{setupError&&<div className="workbook-error" role="alert">{setupError}</div>}{counterError&&<div className="workbook-error" role="alert">Workflow/chat setup: {counterError}</div>}
-      {page==='audit'&&profile.role==='CRO Manager'?<LiveAuditLogs revision={revision}/>:page==='intake'&&profile.role==='Client'?<LiveCaseIntake profile={profile} companies={options.companies} cities={options.cities} onCancel={()=>navigate('cases')} onCreated={id=>{setNotice(`Case ${id} raised and forwarded to your SFSO team for acknowledgement.`);setFilters(emptyFilters);setPageNumber(0);setRevision(value=>value+1);navigate(profile.role==='Client'?'cases':'new');}}/>:selected?<CaseDetail key={workbookKey(selected)} item={selected} profile={profile} onChange={()=>{setCounterRevision(value=>value+1);setRevision(value=>value+1);}} onBack={()=>setSelected(null)} onConversation={item=>{
+      {page==='audit'&&profile.role==='CRO Manager'?<LiveAuditLogs revision={revision}/>:page==='intake'&&profile.role==='Client'?<LiveCaseIntake profile={profile} companies={options.companies} cities={options.cities} onCancel={()=>navigate('reports')} onCreated={id=>{setNotice(`Case ${id} raised and forwarded to your SFSO team for acknowledgement.`);setFilters(emptyFilters);setPageNumber(0);setRevision(value=>value+1);navigate(profile.role==='Client'?'reports':'new');}}/>:selected?<CaseDetail key={workbookKey(selected)} item={selected} profile={profile} onChange={()=>{setCounterRevision(value=>value+1);setRevision(value=>value+1);}} onBack={()=>setSelected(null)} onConversation={item=>{
         const target=groups.find(group=>profile.role==='FSO'?group.kind==='city'&&group.value===(item.city==='Rawalpindi'?'Islamabad':item.city):group.kind==='company'&&group.value===item.company)||groups.find(group=>group.kind==='city'&&group.value===(item.city==='Rawalpindi'?'Islamabad':item.city));
         if(target){navigate(target.key);setConversationCase(item);}else setNotice('No conversation group is configured for this case.');
       }}/>:page==='updates'?<section className="box"><h2>Updates to review</h2><button onClick={()=>{setFilters({...emptyFilters,status:'__review__'});setPageNumber(0);navigate('cases',true);}}>Field findings awaiting review ({counters?.reports_to_review??0})</button><h3>Group messages ({counters?.unread_messages??0} unread)</h3><div className="live-case-action-buttons">{groups.map(item=><button key={item.key} onClick={()=>navigate(item.key,true)}>{item.label}</button>)}</div></section>:group?<LiveGroupChat key={group.key} onOpenCase={setSelected} onStartDirectCall={()=>setDirectCallsOpen(true)} profile={profile} group={group} caseContext={conversationCase} onRead={()=>setCounterRevision(value=>value+1)}/>:<>
         {page==='dashboard'&&<>
           <div className="stats workbook-stats">
             <button className="stat" disabled={!counters} onClick={()=>{setFilters(emptyFilters);setPageNumber(0);navigate('new',true);}}><span>To acknowledge</span><b>{counters?.to_acknowledge.toLocaleString()??'Loading...'}</b></button>
-            <button className="stat" onClick={()=>{setFilters({...emptyFilters,status:'Pending'});setPageNumber(0);navigate('cases',true);}}><span>Pending cases</span><b>{summaryLoading?'?':summary?.pending.toLocaleString()??'?'}</b></button>
             <button className="stat" disabled={!counters} onClick={openUpdates}><span>Updates to review</span><b>{internalUnreadCount.toLocaleString()}</b></button>
             <button className="stat" disabled={!counters} onClick={()=>{setFilters({...emptyFilters,status:'__active__'});setPageNumber(0);navigate('cases',true);}}><span>In progress</span><b>{counters?.in_progress.toLocaleString()??'Loading...'}</b></button>
             <button className="stat" onClick={()=>{setFilters({...emptyFilters,status:'Closed'});setPageNumber(0);navigate('cases',true);}}><span>Closed cases</span><b>{summaryLoading?'?':summary?.closed.toLocaleString()??'?'}</b></button>
@@ -302,12 +333,17 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
         </>}
         {page!=='dashboard'&&<>
         {page==='reports'&&<div className="stats reports-stats"><div className="stat"><span>Total cases</span><b>{summaryLoading?'Loading...':summary?.total.toLocaleString()??'Unavailable'}</b></div><div className="stat"><span>Total exposure (PKR)</span><b>{summary?Number(summary.exposure).toLocaleString('en-PK',{maximumFractionDigits:2}):'Loading...'}</b></div><div className="stat"><span>Recovered (PKR)</span><b>{summary?Number(summary.recovered).toLocaleString('en-PK',{maximumFractionDigits:2}):'Loading...'}</b></div></div>}
+        {showBoard&&<div className="stats workbook-stats case-board-stats">
+          <button className="stat" type="button" onClick={()=>filter('status',filters.status==='__to_ack__'?'':'__to_ack__')}><span>To acknowledge</span><b>{counters?counters.to_acknowledge.toLocaleString():(summaryLoading?'...':rows.filter(item=>getCaseBoardStage(item)==='To acknowledge').length.toLocaleString())}</b></button>
+          <button className="stat" type="button" onClick={()=>filter('status',filters.status==='__active__'?'':'__active__')}><span>In progress</span><b>{counters?counters.in_progress.toLocaleString():(summaryLoading?'...':rows.filter(item=>getCaseBoardStage(item)==='In progress').length.toLocaleString())}</b></button>
+          <button className="stat" type="button" onClick={()=>filter('status',filters.status==='Closed'?'':'Closed')}><span>Closed</span><b>{summary?summary.closed.toLocaleString():(summaryLoading?'...':rows.filter(item=>getCaseBoardStage(item)==='Closed').length.toLocaleString())}</b></button>
+        </div>}
         {profile.role==='FSO'&&error&&<div role="alert" className="workbook-error">{error}<button onClick={()=>setRevision(value=>value+1)}>Retry</button></div>}
         {profile.role==='FSO'?<LiveFsoWorkspace profile={profile} rows={rows} summary={summary} activeCount={counters?.in_progress} loading={loading} total={total} status={filters.status} search={filters.search} onStatus={value=>filter('status',value)} onSearch={value=>filter('search',value)} onOpen={setSelected} onReload={()=>setRevision(value=>value+1)}/>:<>
         {page!=='new'&&caseFilters}
         <div className="workbook-results" hidden={page==='new'}><span role="status">{loading?'Loading cases…':`${total.toLocaleString()} matching cases`}</span><small>{page==='reports'?`Export CSV includes this page (${rows.length} records)`:'Select a case to view details and actions'}</small></div>
         {error&&<div role="alert" className="workbook-error">Could not load cases. {error}<button onClick={()=>setRevision(value=>value+1)}>Retry</button></div>}
-        {page==='new'?<div className="tw"><table className="new-cases-table workbook-table"><thead><tr><th colSpan={7} className="new-cases-filter-cell">{caseFilters}</th></tr><tr><th>Case ID</th><th>Company &amp; Hub</th><th>City</th><th>Issue</th><th>Exact Location</th><th>Priority</th><th>Actions</th></tr></thead><tbody>{rows.map(item=><tr key={workbookKey(item)}><td><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><small>{sourceText(item.reported_date)}</small></td><td><b>{sourceText(item.company)}</b><small>{sourceText(item.hub)}</small></td><td><b>{sourceText(item.city)}</b></td><td><b>{sourceText(item.issue)}</b><small>PKR {sourceText(item.total_loss)}</small></td><td><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button></td><td><span className={'workbook-priority priority-'+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span></td><td><button className="primary" disabled={acknowledging!==null} onClick={()=>void acknowledge(item)}>{acknowledging===workbookKey(item)?'Saving...':'Acknowledge'}</button></td></tr>)}</tbody></table>{!loading&&!rows.length&&!error&&<div className="empty">No new intake cases awaiting review.</div>}</div>:showBoard?<div className="board city-board">{cities.map(city=><section className="column workbook-city-column" key={city}><h2>{city}<small>{rows.filter(item=>sourceText(item.city)===city).length} on this page</small></h2>{!rows.some(item=>sourceText(item.city)===city)&&<p className="city-empty">No cases match this status on this page.</p>}{rows.filter(item=>sourceText(item.city)===city).map(item=><article className="card workbook-board-card" key={workbookKey(item)}><div className="workbook-board-meta"><span className="workbook-company-mark"><CompanyMark company={sourceText(item.company)}/>{sourceText(item.company)}</span><span className={"workbook-priority priority-"+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span><span className="workbook-status">{workflowStage(item)}</span></div><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><p>{sourceText(item.issue)}</p><small>{sourceText(item.city)} / {item.assigned_fso||'Unassigned'}</small><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button><small className="workbook-case-age">{caseAgeLabel(item.reported_date_iso as string|null|undefined) || 'Age unavailable'}</small></article>)}</section>)}</div>:<div className="tw"><table className="reports-table workbook-table"><thead><tr><th>Case ID</th><th>Company & Hub</th><th>City</th><th>Issue</th><th>Exact location</th><th>Priority</th><th>Status</th><th>Total loss</th><th>Recovered</th>{page==='reports'&&<th>Official report</th>}</tr></thead><tbody>{rows.map(item=><tr key={workbookKey(item)}><td><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><small>{sourceText(item.reported_date)}</small><small>Source row {item.source_row}</small></td><td><b>{sourceText(item.company)}</b><small>{sourceText(item.hub)}</small></td><td>{sourceText(item.city)}</td><td>{sourceText(item.issue)}</td><td><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button></td><td><span className={"workbook-priority priority-"+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span></td><td><span className={`workbook-status ${statusClass(item.status)}`}>{workflowStage(item)||(item.status==='Pending'?'New':sourceText(item.status))}</span></td><td>{sourceText(item.total_loss)}</td><td>{sourceText(item.recovered)}</td>{page==='reports'&&<td><button className="link live-report-icon" aria-label={`Generate report for ${sourceText(item.case_id)}, source row ${item.source_row}`} title="Generate report" onClick={()=>setReportItem(item)}><FileText size={18}/></button></td>}</tr>)}</tbody></table>{!loading&&!error&&!rows.length&&<div className="empty">{profile.role==='FSO'?`No cases are assigned to ${profile.officerName} in ${profile.city} matching these filters.`:'No cases match your filters and assigned access.'}</div>}</div>}
+        {page==='new'?<div className="tw"><table className="new-cases-table workbook-table"><thead><tr><th colSpan={7} className="new-cases-filter-cell">{caseFilters}</th></tr><tr><th>Case ID</th><th>Company &amp; Hub</th><th>City</th><th>Issue</th><th>Exact Location</th><th>Priority</th><th>Actions</th></tr></thead><tbody>{rows.map(item=><tr key={workbookKey(item)}><td><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><small>{sourceText(item.reported_date)}</small></td><td><b>{sourceText(item.company)}</b><small>{sourceText(item.hub)}</small></td><td><b>{sourceText(item.city)}</b></td><td><b>{sourceText(item.issue)}</b><small>PKR {sourceText(item.total_loss)}</small></td><td><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button></td><td><span className={'workbook-priority priority-'+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span></td><td><button className="primary" disabled={acknowledging!==null} onClick={()=>void acknowledge(item)}>{acknowledging===workbookKey(item)?'Saving...':'Acknowledge'}</button></td></tr>)}</tbody></table>{!loading&&!rows.length&&!error&&<div className="empty">No new intake cases awaiting review.</div>}</div>:showBoard?<div className="board stage-board">{BOARD_STAGES.map(stage=>{const stageCases=rows.filter(item=>getCaseBoardStage(item)===stage);return <section className="column workbook-stage-column workbook-city-column" key={stage}><h2>{stage}<small>{stageCases.length} on this page</small></h2>{!stageCases.length&&<p className="city-empty">No cases in this stage on this page.</p>}{stageCases.map(item=><article className="card workbook-board-card" key={workbookKey(item)}><div className="workbook-board-meta"><span className="workbook-company-mark"><CompanyMark company={sourceText(item.company)}/>{sourceText(item.company)}</span><span className={"workbook-priority priority-"+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span><span className="workbook-status">{workflowStage(item)||(item.status==='Pending'?'New':sourceText(item.status))}</span></div><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><p>{sourceText(item.issue)}</p><small>{sourceText(item.city)} / {item.assigned_fso||'Unassigned'}</small><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button><small className="workbook-case-age">{caseAgeLabel(item.reported_date_iso as string|null|undefined) || 'Age unavailable'}</small></article>)}</section>;})}</div>:<div className="tw"><table className="reports-table workbook-table"><thead><tr><th>Case ID</th><th>Company & Hub</th><th>City</th><th>Issue</th><th>Exact location</th><th>Priority</th><th>Status</th><th>Total loss</th><th>Recovered</th>{page==='reports'&&<th>Official report</th>}</tr></thead><tbody>{rows.map(item=><tr key={workbookKey(item)}><td><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><small>{sourceText(item.reported_date)}</small><small>Source row {item.source_row}</small></td><td><b>{sourceText(item.company)}</b><small>{sourceText(item.hub)}</small></td><td>{sourceText(item.city)}</td><td>{sourceText(item.issue)}</td><td><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button></td><td><span className={"workbook-priority priority-"+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span></td><td><span className={`workbook-status ${statusClass(item.status)}`}>{workflowStage(item)||(item.status==='Pending'?'New':sourceText(item.status))}</span></td><td>{sourceText(item.total_loss)}</td><td>{sourceText(item.recovered)}</td>{page==='reports'&&<td><button className="link live-report-icon" aria-label={`Generate report for ${sourceText(item.case_id)}, source row ${item.source_row}`} title="Generate report" onClick={()=>setReportItem(item)}><FileText size={18}/></button></td>}</tr>)}</tbody></table>{!loading&&!error&&!rows.length&&<div className="empty">{profile.role==='FSO'?`No cases are assigned to ${profile.officerName} in ${profile.city} matching these filters.`:'No cases match your filters and assigned access.'}</div>}</div>}
         </>}
         <div className={"workbook-pagination "+(profile.role==='FSO'?'live-field-pagination':'')}><small>{total?`${pageNumber*WORKBOOK_PAGE_SIZE+1}–${Math.min((pageNumber+1)*WORKBOOK_PAGE_SIZE,total)} of ${total.toLocaleString()}`:'0 cases'}</small><button disabled={loading||pageNumber===0} onClick={()=>setPageNumber(value=>value-1)}><ChevronLeft size={15}/>Previous</button><button disabled={loading||(pageNumber+1)*WORKBOOK_PAGE_SIZE>=total} onClick={()=>setPageNumber(value=>value+1)}>Next<ChevronRight size={15}/></button></div>
         </>}

@@ -118,6 +118,12 @@
 @media(max-width:700px) { .live-field-content { padding-top:16px; } }
 /* Match the existing demo board dimensions rather than a separate live-data size. */
 .city-board .workbook-city-column { flex:1 0 245px; min-width:245px; max-width:360px; border-top-width:3px; }
+.board.stage-board { display:grid; grid-template-columns:repeat(3,minmax(260px,1fr)); gap:14px; overflow-x:auto; padding-bottom:18px; }
+.stage-board .workbook-stage-column { flex:1 1 0; min-width:260px; max-width:none; border-top-width:3px; }
+@media(max-width:900px) {
+  .board.stage-board { display:flex; align-items:stretch; }
+  .stage-board .workbook-stage-column { flex:0 0 280px; min-width:280px; }
+}
 .workbook-board-card { padding:14px; }
 .workbook-board-card > .workbook-board-meta { margin-bottom:10px; }
 .workbook-board-card .workbook-board-meta > span { padding:0; background:none; border:0; }
@@ -127,10 +133,12 @@
 .live-group-messages .field-empty { text-align:center; color:var(--muted); }
 .live-workspace-group .chat-composer { margin-bottom:0; }
 .live-workspace-group .chat-composer input:disabled { opacity:.65; }
-.workbook-stats { grid-template-columns:repeat(5,minmax(0,1fr)); }
+.workbook-stats { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.case-board-stats { grid-template-columns:repeat(3,minmax(0,1fr)); margin-bottom:16px; }
+.case-board-stats .stat { cursor:pointer; }
 .workbook-stats .stat:disabled { opacity:1; cursor:default; }
-@media(max-width:900px) { .workbook-stats { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-@media(max-width:600px) { .workbook-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:900px) { .workbook-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } .case-board-stats { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:600px) { .workbook-stats, .case-board-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .workbook-stats .workbook-unavailable { font-size:13px; font-weight:500; color:var(--muted); line-height:1.5; }
 .live-chat-messages { height:min(60vh,560px); min-height:280px; overflow-y:auto; padding:14px; background:var(--soft); border-radius:8px; margin-bottom:12px; display:flex; flex-direction:column; gap:12px; }
 .live-chat-bubble { max-width:min(85%,620px); background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; overflow-wrap:anywhere; }

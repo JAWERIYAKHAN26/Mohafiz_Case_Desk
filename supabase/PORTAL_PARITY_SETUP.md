@@ -146,9 +146,14 @@ FSO, SFSO, SOM, CRO and CRO Manager accounts can find and call another active po
 regardless of company or city. The directory shows display name, role, city and company, but
 does not expose email addresses. Calls are one-to-one audio only; they do not create private
 chat messages or record audio. Call metadata is retained to manage ringing and active calls.
-Both users need the portal open and microphone access.
+Both users need the portal open and microphone access. The call directory opens from the phone
+icon in each chat group header; there is no separate Voice Calls navigation tab.
 This migration adds participant-only call records and private Realtime signaling policies;
 do not replace them with broad Realtime access policies.
+
+Apply [20261119_direct_call_busy_status.sql](migrations/20261119_direct_call_busy_status.sql)
+after the direct voice-call migration so the caller is told when the selected person is
+already on another call.
 
 Validation adds database checks for call scope, answer/decline/end, and no invitation messages.
 The browser regression test rings a second user on the Case Details screen, answers/declines,

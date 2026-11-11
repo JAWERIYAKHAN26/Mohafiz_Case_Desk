@@ -40,6 +40,7 @@ end;$preflight$;
     sql += body('20261106_workbook_calculations.sql')
     sql += body('20261110_workflow_query_performance.sql')
     sql += body('20261111_field_chat_updates.sql')
+    sql += body('20261112_incoming_group_calls.sql')
     sql += "\nnotify pgrst,'reload schema';\ncommit;\n"
     out = Path('outputs/current-workbook-audit/INSTALL_WORKBOOK_BACKEND.sql')
     out.write_text(sql, encoding='utf-8')

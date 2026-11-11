@@ -1,10 +1,18 @@
-﻿# Connect live workflow counters and group text chat
+# Connect live workflow counters and group text chat
 
 ## Apply backend setup
 
 Open `supabase/migrations/20261103_workflow_realtime_chat.sql`, copy all contents into Supabase SQL Editor, save as **Connect Workflow And Realtime Chat**, and run once. Requires the workbook read access and scoped dashboard timeout fixes already applied. No sheet values or original assignments are updated. This creates separate workflow/event tables, group messages/read cursors, role policies, action RPCs and Realtime publication entries.
 
 The coding agent has not applied this migration remotely. Missing-table/function errors until it is applied are expected; do not disable RLS or paste a service key into frontend configuration.
+
+## Enable group audio calls
+
+After the workflow/realtime migration, run `supabase/migrations/20261112_group_call_invites.sql`, then `supabase/migrations/20261113_portal_call_roles.sql` in Supabase SQL Editor. The first enables private city call invitation topics; the second extends the same access-checked policies to company chat topics. Client calls use their existing company group topic and are delivered only to CRO accounts. Without the second migration, calls started from a client/company chat cannot subscribe and will time out. These policies use `workspace_group_access`; do not replace them with a broad Realtime policy.
+
+For client-raised cases to route through SFSO, also run `supabase/migrations/20261115_client_intake_sfso_routing.sql` after the case workflow and portal migrations. New client cases are announced in the client company chat and the city chat; SFSO acknowledges before assigning an FSO. Assignment and FSO acceptance are posted to the internal city chat, and SFSO acknowledgement is posted to the client chat. Existing conversation history is retained.
+
+For automated cross-group notifications on case closure, SFSO assignment/acknowledgement, and FSO acknowledgement, apply `supabase/migrations/20261116_case_lifecycle_auto_messages.sql`. Whenever CRO closes a case, an automated notification containing the Case ID is dispatched to both the internal city group and client company group. Whenever SFSO acknowledges and assigns a case to an FSO, an automated message is delivered to the internal city group. Whenever an FSO acknowledges a case (starts dispatch), a confirmation message is delivered to the internal city group. All messages trigger automatically from server-side database events.
 
 ## What works after setup
 
@@ -18,6 +26,7 @@ The coding agent has not applied this migration remotely. Missing-table/function
 - Existing city/company group navigation opens saved text chat. Open the same allowed group in two independent browser sessions to test realtime delivery. Status says Live only after WebSocket subscription succeeds. A visible-page 15-second fetch provides reconnect recovery.
 - Message history is paginated, displays PKT timestamps, preserves multiline text and deduplicates realtime delivery/insert-response retries. Send failures retain the draft. The database assigns sender identity, role and time; the browser cannot spoof them.
 - Opening a visible group marks messages through the newest displayed message as read, reducing the unread count.
+- Audio calls require the two call migrations above, an active Supabase Realtime connection, microphone permission, and HTTPS or localhost. Set up TURN for restrictive networks as described in `supabase/PORTAL_PARITY_SETUP.md`.
 
 ## Access
 

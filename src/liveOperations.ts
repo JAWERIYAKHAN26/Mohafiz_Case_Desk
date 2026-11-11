@@ -15,3 +15,19 @@ export function workflowStage(item:unknown):string|undefined {
  const linked=Array.isArray(item.case_workflow)?item.case_workflow[0]:item.case_workflow;
  if(linked&&typeof linked==='object'&&'stage' in linked&&typeof linked.stage==='string')return linked.stage;
 }
+
+export function formatCroCaseClosedMessage(caseId: string): string {
+ return `Case ${caseId} has been closed by CRO.`;
+}
+
+export function formatSfsoAssignmentMessage(caseId: string, sfsoName: string, fsoName: string): string {
+ return `Case ${caseId} is acknowledged by SFSO ${sfsoName} and assigned to FSO ${fsoName}.`;
+}
+
+export function formatSfsoAcknowledgeMessage(caseId: string, sfsoName: string): string {
+ return `Case ${caseId} is acknowledged by SFSO ${sfsoName}. Ready for FSO assignment.`;
+}
+
+export function formatFsoAcknowledgeMessage(caseId: string, fsoName: string): string {
+ return `Case ${caseId} acknowledged by FSO ${fsoName}. Dispatch started.`;
+}

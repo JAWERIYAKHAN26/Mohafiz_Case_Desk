@@ -41,7 +41,7 @@ export default function GroupAudioCall({room,group,name,onLeave}:{room:string;gr
      for(const id of peerMap.keys())if(!ids.includes(id))remove(id);
      for(const id of ids){if(id===self||self>id||peerMap.has(id))continue;try{const p=peer(id);const offer=await p.pc.createOffer();await p.pc.setLocalDescription(offer);await send(id,{description:offer});}catch(e){if(!closed)setError(databaseMessage(e));}}
     })();});
-    ch.subscribe(s=>{if(closed)return;if(s==='SUBSCRIBED'){setStatus('Waiting for group members...');void ch.track({name});}else if(s==='CHANNEL_ERROR'||s==='TIMED_OUT')setError('Call signaling unavailable. Apply the chat migration and check your connection.');});
+    ch.subscribe(s=>{if(closed)return;if(s==='SUBSCRIBED'){setStatus('Waiting for group members...');void ch.track({name});}else if(s==='CHANNEL_ERROR'||s==='TIMED_OUT')setError('Call signaling unavailable. Apply the group call invites migration and check your connection.');});
    }catch(e){if(!closed)setError(databaseMessage(e));}
   }
   void start();

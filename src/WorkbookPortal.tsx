@@ -160,13 +160,16 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
   },[page,profile.email,revision,counterRevision]);
   useEffect(()=>{
     let alive=true;let timer:number|undefined;
-    const load=async()=>{if(!supabase)return;const result=await supabase.rpc('workflow_counters',{p_sha:WORKBOOK_SHA});if(!alive)return;if(result.error){setCounterError(databaseMessage(result.error));setCounters(null);}else{setCounters(result.data as WorkflowCounters);setCounterError('');}};
+    const load=async()=>{if(!supabase)return;
+      // Clients only need the unread badge; the full case counters scan every workbook row and time out under client RLS.
+      if(profile.role==='Client'){const unread=await supabase.rpc('workspace_unread_count');if(!alive)return;if(unread.error){setCounterError(databaseMessage(unread.error));setCounters(null);}else{const n=Number(unread.data)||0;setCounters({to_acknowledge:0,in_progress:0,reports_to_review:0,unread_messages:n,updates_to_review:n});setCounterError('');}return;}
+      const result=await supabase.rpc('workflow_counters',{p_sha:WORKBOOK_SHA});if(!alive)return;if(result.error){setCounterError(databaseMessage(result.error));setCounters(null);}else{setCounters(result.data as WorkflowCounters);setCounterError('');}};
     const queue=()=>{window.clearTimeout(timer);timer=window.setTimeout(()=>void load(),250);};
     void load();
     const channel=supabase?.channel('live-workspace-counters-'+crypto.randomUUID()).on('postgres_changes',{event:'*',schema:'public',table:'case_workflow'},queue).on('postgres_changes',{event:'INSERT',schema:'public',table:'workspace_messages'},queue).subscribe(status=>{if(status==='SUBSCRIBED')queue();});
     const poll=window.setInterval(()=>{if(document.visibilityState==='visible')queue();},30000);
     return()=>{alive=false;window.clearTimeout(timer);window.clearInterval(poll);if(channel)void supabase!.removeChannel(channel);};
-  },[profile.email,counterRevision,revision]);
+  },[profile.email,profile.role,counterRevision,revision]);
   useEffect(()=>{
     if(!supabase)return;
     let timer:number|undefined;

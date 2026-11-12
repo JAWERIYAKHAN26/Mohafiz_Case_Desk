@@ -148,7 +148,8 @@
 .chat-row-body > .live-chat-bubble { max-width:100%; }
 .live-chat-bubble { max-width:min(85%,620px); background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; overflow-wrap:anywhere; }
 .live-chat-bubble:not(.is-mine) { align-self:flex-start; }
-.live-chat-bubble.is-mine { align-self:flex-end; background:var(--button); border-color:var(--button); color:#fff; }
+.live-chat-bubble.is-mine { align-self:flex-end; background:#1f4650; border-color:#1f4650; color:#fff; }
+.desk:not(.light) .live-chat-bubble.is-mine { background:#0d6b63; border-color:#0d6b63; }
 .live-chat-bubble.is-mine small,.live-chat-bubble.is-mine time { color:#ffffffd1; }
 .live-chat-bubble.is-mine .chat-case-link,.live-chat-bubble.is-mine .chat-file-link,.live-chat-bubble.is-mine .chat-location-link { color:#fff; }
 .live-chat-bubble.is-mine .chat-file-link { background:#ffffff18; border-color:#ffffff55; }

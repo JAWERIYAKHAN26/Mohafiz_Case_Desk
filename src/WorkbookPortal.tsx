@@ -5,6 +5,8 @@ import { WORKBOOK_SHA, WORKBOOK_PAGE_SIZE, workbookSelect, workbookListSelect, w
 import { workbookIssueRules } from './workbookRules';
 import './workbook-portal.css';
 import LiveFsoWorkspace from './LiveFsoWorkspace';
+import LiveFieldReport from './LiveFieldReport';
+import './fso-app.css';
 import { workspaceGroups } from './workspaceGroups';
 import GroupCallProvider from './GroupCallProvider';
 import DirectVoiceCalls from './DirectVoiceCalls';
@@ -71,6 +73,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
   const [accountSettingsOpen,setAccountSettingsOpen]=useState(false);
   const [exporting,setExporting]=useState(false);
   const [reportItem,setReportItem]=useState<WorkbookCase|null>(null);
+  const [fieldReportItem,setFieldReportItem]=useState<WorkbookCase|null>(null);
   const [counters,setCounters]=useState<WorkflowCounters|null>(null);
   const [counterError,setCounterError]=useState('');
   const [counterRevision,setCounterRevision]=useState(0);
@@ -178,7 +181,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
     }).subscribe();
     return()=>{window.clearTimeout(timer);void supabase!.removeChannel(channel);};
   },[profile.email]);
-  function navigate(next:typeof page, dashboardOrigin=false) { if(next==='audit'&&profile.role!=='CRO Manager')return; if(next==='intake'&&profile.role!=='Client')return; setPage(next); setSelected(null); setConversationCase(null); setMenuOpen(false); setFromDashboard(dashboardOrigin); }
+  function navigate(next:typeof page, dashboardOrigin=false) { if(next==='audit'&&profile.role!=='CRO Manager')return; if(next==='intake'&&profile.role!=='Client')return; setPage(next); setSelected(null); setConversationCase(null); setFieldReportItem(null); setMenuOpen(false); setFromDashboard(dashboardOrigin); }
   function filter(key:keyof Filters,value:string) { setFilters(current=>({...current,[key]:value})); setPageNumber(0); }
   useEffect(()=>{
     let alive=true; setSummaryLoading(true); setSetupError('');
@@ -296,6 +299,49 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
           {page==='reports'&&<><label>From<input type="date" value={filters.from} onChange={event=>filter('from',event.target.value)}/></label><label>To<input type="date" min={filters.from} value={filters.to} onChange={event=>filter('to',event.target.value)}/></label></>}
         </div>);
 
+  const accountMenu=(<details className="account-menu" onKeyDown={event=>{if(event.key==='Escape'){event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}}}>
+        <summary className="header-avatar" aria-label="Open account options" title="Account"><UserRound size={18}/></summary>
+        <button className="account-menu-backdrop" type="button" tabIndex={-1} aria-label="Close account options" onClick={event=>event.currentTarget.closest('details')?.removeAttribute('open')}/>
+        <div className="account-menu-panel"><div className="account-profile"><span className="account-profile-avatar"><UserRound size={36} strokeWidth={1.5}/></span><b className="account-profile-welcome">Welcome {profile.name}</b>{profile.name!==profile.role&&<span className="account-profile-role">{profile.role}</span>}<small className="account-profile-email">{profile.email}</small></div>
+          <div className="account-menu-actions"><button type="button" aria-expanded={accountSettingsOpen} aria-controls="live-account-settings" onClick={()=>setAccountSettingsOpen(value=>!value)}><Settings size={18}/>Account Settings</button>
+            {accountSettingsOpen&&<div className="account-settings-fields" id="live-account-settings"><label>Email<input value={profile.email} readOnly/></label><label>Appearance<select value={light?'light':'dark'} onChange={event=>onTheme(event.target.value==='light')}><option value="light">Light</option><option value="dark">Dark</option></select></label></div>}
+            <button type="button" onClick={event=>{event.currentTarget.closest('details')?.removeAttribute('open');openUpdates();}}><Bell size={18}/>Notifications{(profile.role==='Client'?(counters?.unread_messages||0):internalUnreadCount)>0&&<span className="account-notification-count">{profile.role==='Client'?counters?.unread_messages:internalUnreadCount}</span>}</button>
+            <button type="button" className="account-logout" onClick={()=>{setLogoutError('');void onLogout().catch(()=>setLogoutError('Could not sign out. Please retry.'));}}><LogOut size={16}/>Log out</button>{logoutError&&<p className="workbook-error" role="alert">{logoutError}</p>}
+          </div>
+        </div>
+      </details>);
+  const pagination=(<div className={"workbook-pagination "+(profile.role==='FSO'?'live-field-pagination':'')}><small>{total?`${pageNumber*WORKBOOK_PAGE_SIZE+1}–${Math.min((pageNumber+1)*WORKBOOK_PAGE_SIZE,total)} of ${total.toLocaleString()}`:'0 cases'}</small><button disabled={loading||pageNumber===0} onClick={()=>setPageNumber(value=>value-1)}><ChevronLeft size={15}/>Previous</button><button disabled={loading||(pageNumber+1)*WORKBOOK_PAGE_SIZE>=total} onClick={()=>setPageNumber(value=>value+1)}>Next<ChevronRight size={15}/></button></div>);
+
+  if(profile.role==='FSO'){
+    // Field officers get the phone-first field app: My Cases, field report and City Chat with a floating tab bar.
+    const cityGroup=groups.find(item=>item.kind==='city');
+    const openCaseChat=(item:WorkbookCase)=>{
+      const target=groups.find(entry=>entry.kind==='city'&&entry.value===(item.city==='Rawalpindi'?'Islamabad':item.city))||cityGroup;
+      if(target){navigate(target.key);setConversationCase(item);}else setNotice('No conversation group is configured for this case.');
+    };
+    const refreshAfterChange=(message:string)=>{setNotice(message);setRevision(value=>value+1);setCounterRevision(value=>value+1);};
+    const tabs=[['cases','My Cases',BriefcaseBusiness,0],...(cityGroup?[[cityGroup.key,'City Chat',MessagesSquare,unread[cityGroup.key]||0]]:[])] as [string,string,typeof BriefcaseBusiness,number][];
+    return <GroupCallProvider profile={profile} light={light}>
+      <DirectVoiceCalls profile={profile} open={directCallsOpen} groupKey={group?.key} onClose={()=>setDirectCallsOpen(false)}/>
+      <div className={'fso-app'+(group&&!selected?' fso-app-chat':'')+(selected||fieldReportItem?' fso-app-subpage':'')}>
+        {notice&&<div className="fso-notice" role="status">{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={14}/></button></div>}
+        {setupError&&<div className="fso-error" role="alert">{setupError}</div>}
+        {counterError&&<div className="fso-error" role="alert">Workflow/chat setup: {counterError}</div>}
+        {selected?<div className="fso-screen fso-detail"><CaseDetail key={workbookKey(selected)} item={selected} profile={profile} onChange={()=>{setCounterRevision(value=>value+1);setRevision(value=>value+1);}} onBack={()=>setSelected(null)} onConversation={openCaseChat}/></div>
+          :fieldReportItem?<LiveFieldReport key={workbookKey(fieldReportItem)} item={fieldReportItem} onBack={()=>setFieldReportItem(null)} onChat={openCaseChat} onSent={message=>{setFieldReportItem(null);refreshAfterChange(message);}}/>
+          :group?<LiveGroupChat key={group.key} variant="mobile" onOpenCase={setSelected} onStartDirectCall={()=>setDirectCallsOpen(true)} profile={profile} group={group} caseContext={conversationCase} onRead={()=>setCounterRevision(value=>value+1)}/>
+          :<>
+            {error&&<div role="alert" className="fso-error">{error}<button onClick={()=>setRevision(value=>value+1)}>Retry</button></div>}
+            <LiveFsoWorkspace profile={profile} rows={rows} summary={summary} activeCount={counters?.in_progress} loading={loading} total={total} status={filters.status} search={filters.search} accountMenu={accountMenu}
+              onStatus={value=>filter('status',value)} onSearch={value=>filter('search',value)} onOpen={setSelected} onReload={()=>setRevision(value=>value+1)}
+              onChat={openCaseChat} onReport={setFieldReportItem} onChanged={refreshAfterChange}/>
+            {total>WORKBOOK_PAGE_SIZE&&pagination}
+          </>}
+      </div>
+      {!selected&&!fieldReportItem&&<nav className="fso-tabbar" aria-label="Field app navigation">{tabs.map(([key,label,Icon,count])=><button key={key} className={page===key?'active':''} aria-current={page===key?'page':undefined} onClick={()=>navigate(key)}><span className="fso-tab-icon"><Icon size={20}/>{count>0&&<span className="fso-tab-badge">{count}</span>}</span>{label}</button>)}</nav>}
+    </GroupCallProvider>;
+  }
+
   return <GroupCallProvider profile={profile} light={light}>
     <DirectVoiceCalls profile={profile} open={directCallsOpen} groupKey={group?.key} onClose={()=>setDirectCallsOpen(false)}/>
     {locationItem&&<LiveLocationModal item={locationItem} onClose={()=>setLocationItem(null)}/>}
@@ -307,17 +353,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
       <button className="mobile-menu-btn" aria-label="Open navigation" onClick={()=>setMenuOpen(true)}><Menu size={18}/></button>
       <div className="workbook-page-title"><div className="eyebrow" hidden={page==='new'}>{selected?'CASE DETAILS':group?(group.kind==='city'?'CITY OPERATIONS CHAT':'COMMUNICATION'):page==='reports'?'ANALYTICS':page==='dashboard'?'OVERVIEW':showBoard?'CASE MANAGEMENT':'FIELD WORKSPACE'}</div><h1>{title}</h1></div>
       <div className="workbook-heading-actions">{profile.role==='Client'&&page!=='dashboard'&&page!=='new'&&page!=='intake'&&!selected&&!group&&<button className="primary" onClick={()=>navigate('intake')}>+ Raise a Case</button>}{fromDashboard&&page!=='dashboard'&&!selected&&<button className="workbook-reload" onClick={()=>navigate('dashboard')}>Back to Dashboard</button>}{page==='reports'&&!selected&&<button className="primary" title={`Download the ${rows.length} records on page ${pageNumber+1} as CSV`} disabled={loading||exporting||!rows.length} onClick={()=>void exportPage()}>{exporting?'Exporting...':'Export CSV'}</button>}{!['dashboard','new','intake'].includes(page)&&<button className="workbook-reload" aria-label="Reload records" title="Reload records" onClick={()=>setRevision(value=>value+1)} disabled={loading||summaryLoading}><RefreshCw size={14}/></button>}</div>
-      <div className="header-controls"><details className="account-menu" onKeyDown={event=>{if(event.key==='Escape'){event.currentTarget.open=false;event.currentTarget.querySelector('summary')?.focus();}}}>
-        <summary className="header-avatar" aria-label="Open account options" title="Account"><UserRound size={18}/></summary>
-        <button className="account-menu-backdrop" type="button" tabIndex={-1} aria-label="Close account options" onClick={event=>event.currentTarget.closest('details')?.removeAttribute('open')}/>
-        <div className="account-menu-panel"><div className="account-profile"><span className="account-profile-avatar"><UserRound size={36} strokeWidth={1.5}/></span><b className="account-profile-welcome">Welcome {profile.name}</b>{profile.name!==profile.role&&<span className="account-profile-role">{profile.role}</span>}<small className="account-profile-email">{profile.email}</small></div>
-          <div className="account-menu-actions"><button type="button" aria-expanded={accountSettingsOpen} aria-controls="live-account-settings" onClick={()=>setAccountSettingsOpen(value=>!value)}><Settings size={18}/>Account Settings</button>
-            {accountSettingsOpen&&<div className="account-settings-fields" id="live-account-settings"><label>Email<input value={profile.email} readOnly/></label><label>Appearance<select value={light?'light':'dark'} onChange={event=>onTheme(event.target.value==='light')}><option value="light">Light</option><option value="dark">Dark</option></select></label></div>}
-            <button type="button" onClick={event=>{event.currentTarget.closest('details')?.removeAttribute('open');openUpdates();}}><Bell size={18}/>Notifications{(profile.role==='Client'?(counters?.unread_messages||0):internalUnreadCount)>0&&<span className="account-notification-count">{profile.role==='Client'?counters?.unread_messages:internalUnreadCount}</span>}</button>
-            <button type="button" className="account-logout" onClick={()=>{setLogoutError('');void onLogout().catch(()=>setLogoutError('Could not sign out. Please retry.'));}}><LogOut size={16}/>Log out</button>{logoutError&&<p className="workbook-error" role="alert">{logoutError}</p>}
-          </div>
-        </div>
-      </details></div>
+      <div className="header-controls">{accountMenu}</div>
     </div>
       {notice&&<div className="box live-notice" role="status">{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={14}/></button></div>}{setupError&&<div className="workbook-error" role="alert">{setupError}</div>}{counterError&&<div className="workbook-error" role="alert">Workflow/chat setup: {counterError}</div>}
       {page==='audit'&&profile.role==='CRO Manager'?<LiveAuditLogs revision={revision}/>:page==='intake'&&profile.role==='Client'?<LiveCaseIntake profile={profile} companies={options.companies} cities={options.cities} onCancel={()=>navigate('reports')} onCreated={id=>{setNotice(`Case ${id} raised and forwarded to your SFSO team for acknowledgement.`);setFilters(emptyFilters);setPageNumber(0);setRevision(value=>value+1);navigate(profile.role==='Client'?'reports':'new');}}/>:selected?<CaseDetail key={workbookKey(selected)} item={selected} profile={profile} onChange={()=>{setCounterRevision(value=>value+1);setRevision(value=>value+1);}} onBack={()=>setSelected(null)} onConversation={item=>{
@@ -342,13 +378,13 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
           <button className="stat" type="button" onClick={()=>filter('status',filters.status==='Closed'?'':'Closed')}><span>Closed</span><b>{summary?summary.closed.toLocaleString():(summaryLoading?'...':rows.filter(item=>getCaseBoardStage(item)==='Closed').length.toLocaleString())}</b></button>
         </div>}
         {profile.role==='FSO'&&error&&<div role="alert" className="workbook-error">{error}<button onClick={()=>setRevision(value=>value+1)}>Retry</button></div>}
-        {profile.role==='FSO'?<LiveFsoWorkspace profile={profile} rows={rows} summary={summary} activeCount={counters?.in_progress} loading={loading} total={total} status={filters.status} search={filters.search} onStatus={value=>filter('status',value)} onSearch={value=>filter('search',value)} onOpen={setSelected} onReload={()=>setRevision(value=>value+1)}/>:<>
+        {<>
         {page!=='new'&&caseFilters}
         <div className="workbook-results" hidden={page==='new'}><span role="status">{loading?'Loading cases…':`${total.toLocaleString()} matching cases`}</span><small>{page==='reports'?`Export CSV includes this page (${rows.length} records)`:'Select a case to view details and actions'}</small></div>
         {error&&<div role="alert" className="workbook-error">Could not load cases. {error}<button onClick={()=>setRevision(value=>value+1)}>Retry</button></div>}
         {page==='new'?<div className="tw"><table className="new-cases-table workbook-table"><thead><tr><th colSpan={7} className="new-cases-filter-cell">{caseFilters}</th></tr><tr><th>Case ID</th><th>Company &amp; Hub</th><th>City</th><th>Issue</th><th>Exact Location</th><th>Priority</th><th>Actions</th></tr></thead><tbody>{rows.map(item=><tr key={workbookKey(item)}><td><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><small>{sourceText(item.reported_date)}</small></td><td><b>{sourceText(item.company)}</b><small>{sourceText(item.hub)}</small></td><td><b>{sourceText(item.city)}</b></td><td><b>{sourceText(item.issue)}</b><small>PKR {sourceText(item.total_loss)}</small></td><td><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button></td><td><span className={'workbook-priority priority-'+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span></td><td><button className="primary" disabled={acknowledging!==null} onClick={()=>void acknowledge(item)}>{acknowledging===workbookKey(item)?'Saving...':'Acknowledge'}</button></td></tr>)}</tbody></table>{!loading&&!rows.length&&!error&&<div className="empty">No new intake cases awaiting review.</div>}</div>:showBoard?<div className="board stage-board">{BOARD_STAGES.map(stage=>{const stageCases=rows.filter(item=>getCaseBoardStage(item)===stage);return <section className="column workbook-stage-column workbook-city-column" key={stage}><h2>{stage}<small>{stageCases.length} on this page</small></h2>{!stageCases.length&&<p className="city-empty">No cases in this stage on this page.</p>}{stageCases.map(item=><article className="card workbook-board-card" key={workbookKey(item)}><div className="workbook-board-meta"><span className="workbook-company-mark"><CompanyMark company={sourceText(item.company)}/>{sourceText(item.company)}</span><span className={"workbook-priority priority-"+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span><span className="workbook-status">{workflowStage(item)||(item.status==='Pending'?'New':sourceText(item.status))}</span></div><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><p>{sourceText(item.issue)}</p><small>{sourceText(item.city)} / {item.assigned_fso||'Unassigned'}</small><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button><small className="workbook-case-age">{caseAgeLabel(item.reported_date_iso as string|null|undefined) || 'Age unavailable'}</small></article>)}</section>;})}</div>:<div className="tw"><table className="reports-table workbook-table"><thead><tr><th>Case ID</th><th>Company & Hub</th><th>City</th><th>Issue</th><th>Exact location</th><th>Priority</th><th>Status</th><th>Total loss</th><th>Recovered</th>{page==='reports'&&<th>Official report</th>}</tr></thead><tbody>{rows.map(item=><tr key={workbookKey(item)}><td><button className="link" onClick={()=>setSelected(item)}><b>{sourceText(item.case_id)}</b></button><small>{sourceText(item.reported_date)}</small><small>Source row {item.source_row}</small></td><td><b>{sourceText(item.company)}</b><small>{sourceText(item.hub)}</small></td><td>{sourceText(item.city)}</td><td>{sourceText(item.issue)}</td><td><button className="workbook-location" onClick={()=>setLocationItem(item)}><MapPin size={12}/><span>{sourceText(item.location)}</span></button></td><td><span className={"workbook-priority priority-"+String(item.priority||'').toLowerCase()}>{sourceText(item.priority)}</span></td><td><span className={`workbook-status ${statusClass(item.status)}`}>{workflowStage(item)||(item.status==='Pending'?'New':sourceText(item.status))}</span></td><td>{sourceText(item.total_loss)}</td><td>{sourceText(item.recovered)}</td>{page==='reports'&&<td><button className="link live-report-icon" aria-label={`Generate report for ${sourceText(item.case_id)}, source row ${item.source_row}`} title="Generate report" onClick={()=>setReportItem(item)}><FileText size={18}/></button></td>}</tr>)}</tbody></table>{!loading&&!error&&!rows.length&&<div className="empty">{profile.role==='FSO'?`No cases are assigned to ${profile.officerName} in ${profile.city} matching these filters.`:'No cases match your filters and assigned access.'}</div>}</div>}
         </>}
-        <div className={"workbook-pagination "+(profile.role==='FSO'?'live-field-pagination':'')}><small>{total?`${pageNumber*WORKBOOK_PAGE_SIZE+1}–${Math.min((pageNumber+1)*WORKBOOK_PAGE_SIZE,total)} of ${total.toLocaleString()}`:'0 cases'}</small><button disabled={loading||pageNumber===0} onClick={()=>setPageNumber(value=>value-1)}><ChevronLeft size={15}/>Previous</button><button disabled={loading||(pageNumber+1)*WORKBOOK_PAGE_SIZE>=total} onClick={()=>setPageNumber(value=>value+1)}>Next<ChevronRight size={15}/></button></div>
+        {pagination}
         </>}
       </>}
     </section></main>

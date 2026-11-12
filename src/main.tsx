@@ -1761,7 +1761,7 @@ function App() {
   };
 
   return (
-    <div className={'desk ' + (!signed || light ? 'light' : '') + (signed && (role === 'FSO' || isSupervisor) ? ' mobile-portal' : '') + (signed && role === 'FSO' && page === 'My Cases' && !c ? ' fso-cases-page' : '') + (signed && (role === 'FSO' || isSupervisor) && cityChatPages.includes(page) && !c ? ' mobile-chat-page' : '')}>
+    <div className={'desk ' + (!signed || light ? 'light' : '') + (signed && liveProfile?.role === 'FSO' ? ' fso-live' : signed && (role === 'FSO' || isSupervisor) ? ' mobile-portal' : '') + (signed && role === 'FSO' && page === 'My Cases' && !c ? ' fso-cases-page' : '') + (signed && (role === 'FSO' || isSupervisor) && cityChatPages.includes(page) && !c ? ' mobile-chat-page' : '')}>
       {/* Exact Location & Map Preview Modal */}
       {viewLocCase && (
         <div className="modal-overlay" onClick={() => setViewLocCase(null)}>

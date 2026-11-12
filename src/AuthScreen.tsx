@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Mail, LockKeyhole, UserRound, ChevronDown } from 'lucide-react';
 import { supabase } from './supabase';
 
 export default function AuthScreen({ recovery, message, onRecovered, demoOptions = [], onDemo }: {
@@ -94,16 +94,17 @@ export default function AuthScreen({ recovery, message, onRecovered, demoOptions
   return <div className="login-page"><div className="login-layout">
     <section className="login-hero" aria-label="Mohafiz Secure System">
       <div className="login-hero-brand"><img className="login-logo" src="/images/mohafiz-logo.png" alt="Mohafiz Secure" width={72} height={72} /><span>Secure incident workflow portal</span></div>
-      <div className="login-hero-copy"><h1>Mohafiz<br />Secure System</h1><p className="login-description">Log incidents, assign them to the right city desk, and follow each one through to resolution.</p></div>
+      <div className="login-hero-copy"><h1>Mohafiz<br /> Secure System</h1><p className="login-description">Log incidents, assign them to the right city desk, and follow each one through to resolution.</p><p className="login-mobile-tagline">Secure access to your assigned cases and field updates.</p></div>
     </section>
+    <div className="login-side">
     <section className="login-card">
       <div className="login-card-heading"><h2>{recovery ? 'Set new password' : mode === 'otp' ? 'Enter reset code' : mode === 'forgot' ? 'Forgot password' : 'Sign in'}</h2></div>
       <form onSubmit={submit}>
-        {!recovery && <label>Email<input type="email" autoComplete="username" placeholder="you@company.com" required readOnly={mode === 'otp'} value={email} onChange={event => setEmail(event.target.value)} /></label>}
+        {!recovery && <label className="login-field"><span className="login-field-label">Email</span><span className="login-input-icon"><Mail size={17} aria-hidden="true" /><input type="email" autoComplete="username" placeholder="you@company.com" required readOnly={mode === 'otp'} value={email} onChange={event => setEmail(event.target.value)} /></span></label>}
         {!recovery && mode === 'otp' && <label>Email code<input name="otp" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6,10}" maxLength={10} required value={otp} onChange={event => setOtp(event.target.value.replace(/\D/g, ''))} /></label>}
         {(recovery || mode === 'login') && <div className="password-field">
-          <label htmlFor="auth-password">{recovery ? 'New password' : 'Password'}</label>
-          <div className="password-input"><input id="auth-password" name="password" type={showPassword ? 'text' : 'password'} required minLength={recovery ? 8 : undefined} autoComplete={recovery ? 'new-password' : 'current-password'} placeholder={recovery ? 'At least 8 characters' : 'Enter your password'} />
+          <label htmlFor="auth-password" className="login-field-label">{recovery ? 'New password' : 'Password'}</label>
+          <div className="password-input login-input-icon"><LockKeyhole size={17} aria-hidden="true" /><input id="auth-password" name="password" type={showPassword ? 'text' : 'password'} required minLength={recovery ? 8 : undefined} autoComplete={recovery ? 'new-password' : 'current-password'} placeholder={recovery ? 'At least 8 characters' : 'Enter your password'} />
             <button type="button" className="password-toggle-btn" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
           </div>
         </div>}
@@ -125,11 +126,13 @@ export default function AuthScreen({ recovery, message, onRecovered, demoOptions
           finally { setBusy(false); }
         }}>Back to sign in</button>}
       </form>
-      {!recovery && onDemo && <div className="login-demo-access">
-        <label>Demo: sign in as<select value={demoRole} onChange={event => setDemoRole(event.target.value)}>{demoOptions.map(option => <option key={option}>{option}</option>)}</select></label>
-        <button type="button" className="full" onClick={() => onDemo(demoRole)}>Open demo</button>
-      </div>}
       {(notice || message || !supabase) && <p className="login-status" role="status">{notice || message || 'Supabase connection is not configured yet.'}</p>}
     </section>
+    {!recovery && onDemo && <section className="login-card login-demo-access" aria-label="Demo access">
+      <small className="login-demo-label">Development only · Demo</small>
+      <label className="login-demo-select"><span className="sr-only">Demo: sign in as</span><UserRound size={17} aria-hidden="true" /><select value={demoRole} onChange={event => setDemoRole(event.target.value)}>{demoOptions.map(option => <option key={option}>{option}</option>)}</select><ChevronDown size={16} aria-hidden="true" /></label>
+      <button type="button" className="full login-demo-button" onClick={() => onDemo(demoRole)}>Open demo</button>
+    </section>}
+    </div>
   </div></div>;
 }

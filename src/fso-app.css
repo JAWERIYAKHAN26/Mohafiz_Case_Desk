@@ -1,0 +1,191 @@
+/* Field officer (FSO) phone-first app: My Cases, Field report, City Chat. Scoped to live FSO sign-ins. */
+.desk.fso-live { --fso-teal: #1f4650; --fso-teal-text: #ffffff; --fso-soft: #eef2f0; --fso-input: #eaf0f4; --fso-shadow: 0 2px 10px #1f465012; --fso-blue: #2f80ed; --fso-amber: #e8a317; --fso-green: #22a06b; background: var(--bg); }
+.desk.fso-live:not(.light) { --fso-teal: #0f2f37; --fso-soft: #284c55; --fso-input: #1a3a43; --fso-shadow: 0 2px 10px #00000030; }
+
+.fso-app { width: 100%; max-width: 460px; margin: 0 auto; min-height: 100dvh; padding: 16px 16px calc(112px + env(safe-area-inset-bottom, 0px)); color: var(--text); }
+.fso-app.fso-app-subpage { padding-bottom: 32px; }
+.fso-app * { min-width: 0; }
+.fso-app button, .fso-app a { -webkit-tap-highlight-color: transparent; }
+.fso-screen { display: grid; gap: 12px; }
+
+/* Notices */
+.fso-notice, .fso-error { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 12px; border-radius: 12px; font-size: 12px; line-height: 1.5; }
+.fso-notice { background: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-border); }
+.fso-error { background: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-border); }
+.fso-notice button, .fso-error button { margin-left: auto; flex-shrink: 0; min-height: 30px; min-width: 30px; padding: 4px 8px; border: 0; background: transparent; color: inherit; font-size: 12px; }
+.fso-screen .fso-error { margin: 0; }
+
+/* Shared controls */
+.fso-icon-button { display: grid; place-items: center; width: 38px; height: 38px; min-height: 38px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; }
+.fso-primary { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 50px; padding: 12px 16px; border: 0; border-radius: 14px; background: var(--button); color: #fff; font-size: 14px; font-weight: 650; }
+.fso-primary:hover:not(:disabled) { background: var(--button-hover); }
+.fso-primary:disabled { opacity: .45; }
+.fso-primary.fso-primary-soft { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+.fso-primary.fso-primary-soft:hover { background: var(--fso-soft); }
+.fso-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; box-shadow: var(--fso-shadow); }
+
+/* Officer header */
+.fso-officer-card { display: flex; align-items: center; gap: 12px; padding: 18px; border-radius: 18px; background: var(--fso-teal); color: var(--fso-teal-text); }
+.fso-officer-card > div:first-child { flex: 1; }
+.fso-officer-card small { color: #b7d0d2; font-size: 10px; font-weight: 700; letter-spacing: 1.4px; }
+.fso-officer-card h1 { margin: 4px 0 6px; font-size: 19px; line-height: 1.25; color: #fff; overflow-wrap: anywhere; }
+.fso-duty { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: #dce9e6; }
+.fso-duty i { width: 8px; height: 8px; border-radius: 50%; background: #3ddc84; box-shadow: 0 0 0 3px #3ddc8433; }
+.fso-duty.busy i { background: #3ddc84; }
+.fso-officer-tools { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.fso-officer-tools .fso-icon-button { color: #dce9e6; }
+.fso-officer-tools .fso-icon-button:hover { background: #ffffff1a; }
+.fso-officer-tools .account-menu > .header-avatar { width: 48px; height: 48px; min-height: 48px; border: 2px solid #ffffffb3; background: #dfe7e6; color: #5b7472; }
+
+/* Counters */
+.fso-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.fso-stats button { display: grid; justify-items: start; justify-content: start; align-content: start; gap: 2px; min-height: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); color: var(--text); text-align: left; box-shadow: var(--fso-shadow); }
+.fso-stats button[aria-pressed="true"] { border-color: var(--accent); }
+.fso-stats .dot { width: 8px; height: 8px; border-radius: 50%; margin-bottom: 6px; }
+.fso-stats .dot.active { background: var(--fso-blue); }
+.fso-stats .dot.pending { background: var(--fso-amber); }
+.fso-stats .dot.done { background: var(--fso-green); }
+.fso-stats b { font-size: 24px; line-height: 1.1; font-weight: 700; }
+.fso-stats span { font-size: 12px; color: var(--muted); }
+
+/* Filters */
+.fso-status-select, .fso-search { position: relative; display: flex; flex-direction: row; align-items: center; gap: 6px; min-height: 50px; padding: 0 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); box-shadow: var(--fso-shadow); }
+.fso-status-select > span { font-weight: 650; font-size: 14px; white-space: nowrap; }
+.fso-status-select select { flex: 1; appearance: none; -webkit-appearance: none; min-height: 48px; padding: 0 28px 0 0; border: 0; background: transparent; box-shadow: none; font-size: 14px; font-weight: 650; color: var(--text); cursor: pointer; }
+.fso-status-select > svg { position: absolute; right: 14px; pointer-events: none; color: var(--muted); }
+.fso-search { min-height: 44px; color: var(--muted); }
+.fso-search input { flex: 1; min-height: 42px; padding: 0; border: 0; background: transparent; box-shadow: none; font-size: 13px; }
+.fso-search input:focus, .fso-status-select select:focus { outline: none; }
+.fso-status-select:focus-within, .fso-search:focus-within { border-color: var(--accent); }
+.fso-count { margin: 2px 2px 0; font-size: 12px; color: var(--muted); }
+.fso-empty { display: flex; align-items: center; gap: 12px; padding: 22px; border: 1px dashed var(--border); border-radius: 16px; color: var(--muted); }
+.fso-empty p { margin: 0; font-size: 13px; line-height: 1.6; }
+
+/* Case cards */
+.fso-case-list { display: grid; gap: 14px; }
+.fso-case { display: grid; gap: 10px; padding: 18px 16px 12px; border: 1px solid var(--border); border-radius: 18px; background: var(--card); box-shadow: var(--fso-shadow); overflow-wrap: anywhere; }
+.fso-case-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.fso-case-id { min-height: 0; padding: 0; border: 0; background: none; color: var(--text); font-size: 21px; font-weight: 750; letter-spacing: -.3px; text-align: left; }
+.fso-case-id:hover { text-decoration: underline; }
+.fso-more { color: var(--muted); margin-right: -8px; }
+.fso-more:hover { background: var(--fso-soft); }
+.fso-priority { margin-top: -6px; font-size: 13px; font-weight: 700; color: var(--accent); }
+.fso-priority.high, .fso-priority.critical { color: var(--button); }
+.fso-priority.medium { color: var(--warning-text); }
+.fso-priority.low { color: var(--success-text); }
+.fso-case h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.fso-case-company { margin: -6px 0 0; font-size: 13px; color: var(--muted); }
+.fso-tracker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 6px 0 2px; padding: 0; list-style: none; }
+.fso-tracker li { position: relative; display: grid; justify-items: center; gap: 6px; font-size: 11px; color: var(--muted); text-align: center; }
+.fso-tracker li::before { content: ''; position: absolute; top: 6px; left: -50%; width: 100%; height: 2px; background: var(--border); z-index: 0; }
+.fso-tracker li:first-child::before { display: none; }
+.fso-tracker li.done::before, .fso-tracker li.current::before { background: var(--accent); }
+.fso-tracker i { position: relative; z-index: 1; width: 14px; height: 14px; border-radius: 50%; background: var(--border); border: 3px solid var(--card); box-sizing: content-box; margin-top: -3px; }
+.fso-tracker li.done i { background: var(--accent); }
+.fso-tracker li.current i { background: var(--button); }
+.fso-tracker li.current { color: var(--text); font-weight: 650; }
+.fso-stage { margin-top: -4px; text-align: center; font-size: 11px; color: var(--accent); }
+.fso-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 2px; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; color: var(--text); font-size: 13px; text-align: left; text-decoration: none; }
+.fso-row > svg:first-child { flex-shrink: 0; color: var(--text); }
+.fso-row > span { flex: 1; line-height: 1.45; }
+.fso-row > span small { font-size: 11px; color: var(--muted); }
+.fso-row > svg:last-child:not(:first-child) { flex-shrink: 0; color: var(--muted); }
+button.fso-row:hover, a.fso-row:hover { background: transparent; color: var(--accent); }
+.fso-quick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 2px; }
+.fso-quick a, .fso-quick button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 8px; border: 0; border-radius: 12px; background: var(--fso-soft); color: var(--text); font-size: 13px; font-weight: 600; text-decoration: none; }
+.fso-quick a:hover, .fso-quick button:hover { filter: brightness(.97); }
+.fso-case-final { margin: 2px 0; padding: 12px; border-radius: 12px; background: var(--fso-soft); color: var(--muted); font-size: 13px; text-align: center; }
+.fso-busy { justify-self: center; min-height: 40px; padding: 6px 14px; border: 0; background: transparent; color: var(--accent); font-size: 13px; font-weight: 650; }
+.fso-busy:hover { text-decoration: underline; background: transparent; }
+
+/* Report busy bottom sheet */
+.fso-sheet-backdrop { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: flex-end; justify-content: center; background: #0f2a3080; }
+.fso-sheet { display: grid; gap: 12px; width: 100%; max-width: 460px; padding: 20px 18px calc(20px + env(safe-area-inset-bottom, 0px)); border-radius: 22px 22px 0 0; background: var(--card); color: var(--text); }
+.fso-sheet-head { display: flex; align-items: center; justify-content: space-between; }
+.fso-sheet h2 { margin: 0; font-size: 18px; }
+.fso-sheet-head button { min-height: 36px; width: 36px; padding: 0; border: 0; border-radius: 50%; background: var(--fso-soft); }
+.fso-sheet p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.55; }
+.fso-sheet label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
+.fso-sheet textarea { min-height: 110px; border-radius: 12px; border-color: var(--border); background: var(--fso-input); font-size: 14px; }
+
+/* Sub-page header (field report, case details) */
+.fso-subheader { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; min-height: 44px; }
+.fso-subheader button { justify-self: start; gap: 2px; min-height: 40px; padding: 4px 6px 4px 0; border: 0; background: transparent; color: var(--accent); font-size: 14px; font-weight: 650; }
+.fso-subheader h1 { margin: 0; font-size: 16px; font-weight: 700; }
+.fso-report-ref { margin: -4px 0 0; text-align: center; font-size: 12px; color: var(--muted); }
+.fso-report form { display: grid; gap: 10px; }
+.fso-report label { font-size: 15px; font-weight: 700; color: var(--text); }
+.fso-report textarea { min-height: 150px; padding: 14px; border: 0; border-radius: 12px; background: var(--fso-input); font-size: 14px; line-height: 1.55; resize: vertical; }
+.fso-report textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+.fso-report-counter { justify-self: end; margin-top: -4px; font-size: 12px; color: var(--muted); }
+.fso-report-counter.ok { color: var(--success-text); }
+.fso-report-hint { margin: 0; font-size: 12px; color: var(--warning-text); }
+.fso-report-media { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; min-height: 0; text-align: left; color: var(--text); }
+.fso-report-media > svg { flex-shrink: 0; color: var(--accent); }
+.fso-report-media b { display: block; font-size: 13px; }
+.fso-report-media small { font-size: 12px; }
+.fso-report-history h2 { margin: 0 0 8px; font-size: 14px; }
+.fso-report-history article { padding: 10px 0; border-top: 1px solid var(--border); }
+.fso-report-history p { margin: 4px 0 0; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+
+/* Case details inside the phone column */
+.fso-detail .live-detail-toolbar { position: sticky; top: 0; z-index: 5; padding: 8px 0; background: var(--bg); }
+.fso-detail .live-detail-toolbar > button { border: 0; background: transparent; color: var(--accent); font-weight: 650; padding-left: 0; }
+.fso-detail .live-detail-toolbar > div { width: 100%; }
+.fso-detail .live-detail-toolbar > div > button { flex: 1 1 100%; min-height: 48px; border-radius: 14px; font-size: 13px; }
+.fso-detail .field-service-layout { grid-template-columns: minmax(0, 1fr) !important; gap: 12px; }
+.fso-detail .field-service-layout > .box, .fso-detail .box { border-radius: 16px; padding: 16px; }
+.fso-detail .service-fields { grid-template-columns: 1fr; gap: 10px; }
+.fso-detail .field-service-layout > .service-activity { min-height: 0; }
+.fso-detail .live-case-action-buttons { display: grid; gap: 8px; }
+.fso-detail .live-case-action-buttons button { min-height: 46px; border-radius: 12px; }
+
+/* City Chat */
+.fso-app-chat { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+.fso-app .fso-chat { display: flex; flex-direction: column; height: calc(100dvh - 128px - env(safe-area-inset-bottom, 0px)); min-height: 420px; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.fso-app .fso-chat .chat-thread-header { min-height: 0; margin: 0 0 10px; padding: 0; border: 0; background: transparent; }
+.fso-app .fso-chat .chat-thread-header h1 { margin: 0; font-size: 22px; line-height: 1.2; color: var(--text); }
+.fso-app .fso-chat .chat-thread-header small { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 12px; }
+.fso-app .fso-chat .chat-connection { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.fso-app .fso-chat .chat-connection.live { background: var(--fso-green); }
+.fso-app .fso-chat .chat-connection.reconnecting, .fso-app .fso-chat .chat-connection.connecting { background: var(--fso-amber); }
+.fso-app .fso-chat .chat-header-tools button { width: 40px; height: 40px; min-height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text); }
+.fso-app .fso-chat .chat-header-tools button:hover { background: var(--fso-soft); }
+.fso-app .fso-chat .chat-search { margin: 0 0 10px; padding: 0 14px; min-height: 44px; border: 0; border-radius: 14px; background: var(--fso-soft); color: var(--muted); }
+.fso-app .fso-chat .chat-search input { min-height: 42px; padding: 0; border: 0; background: transparent; box-shadow: none; font-size: 14px; }
+.fso-app .fso-chat .chat-search input:focus { outline: none; }
+.fso-app .fso-chat .live-chat-case-context { margin: 0 0 8px; font-size: 12px; color: var(--accent); }
+.fso-app .fso-chat .live-chat-messages { flex: 1; height: auto; min-height: 0; margin: 0 0 10px; padding: 6px 2px; border: 0; border-radius: 0; background: transparent; gap: 14px; }
+.fso-app .fso-chat .live-chat-messages > button { align-self: center; min-height: 32px; padding: 4px 12px; border-radius: 16px; font-size: 12px; }
+.fso-app .fso-chat .chat-row-body { max-width: 82%; }
+.fso-app .fso-chat .chat-avatar { display: grid; place-items: center; width: 32px; height: 32px; margin-top: 18px; flex-shrink: 0; border-radius: 50%; background: var(--border); color: var(--text); font-size: 11px; font-weight: 700; }
+.fso-app .fso-chat .chat-row-meta { margin: 0 4px 4px; font-size: 11px; color: var(--muted); }
+.fso-app .fso-chat .live-chat-bubble { padding: 10px 14px; border: 0; border-radius: 16px 16px 16px 4px; background: var(--card); color: var(--text); box-shadow: var(--fso-shadow); }
+.fso-app .fso-chat .live-chat-bubble.is-mine { border-radius: 16px 16px 4px 16px; background: var(--fso-teal); color: #fff; }
+.fso-app .fso-chat .live-chat-bubble p { margin: 0; font-size: 14px; line-height: 1.5; }
+.fso-app .fso-chat .live-chat-bubble.is-mine .chat-case-link { color: #fff; }
+.fso-app .fso-chat .chat-location-link { display: flex; align-items: center; gap: 10px; margin: 8px 0 0; padding: 10px; border-radius: 12px; background: var(--fso-soft); color: var(--text); text-decoration: none; }
+.fso-app .fso-chat .chat-location-link > svg { flex-shrink: 0; color: var(--button); }
+.fso-app .fso-chat .chat-location-link b { display: block; font-size: 13px; }
+.fso-app .fso-chat .chat-location-link small { font-size: 11px; }
+.fso-app .fso-chat .live-chat-bubble.is-mine .chat-location-link { background: #ffffff1f; color: #fff; }
+.fso-app .fso-chat .live-chat-bubble.is-mine .chat-location-link small { color: #ffffffcc; }
+.fso-app .fso-chat form.chat-composer { width: 100%; max-width: 100%; margin: 0; padding: 6px 6px 6px 8px; gap: 2px; border: 1px solid var(--border); border-radius: 28px; background: var(--card); box-shadow: var(--fso-shadow); }
+.fso-app .fso-chat form.chat-composer > button:not(.chat-composer-send) { width: 38px; min-width: 38px; height: 38px; min-height: 38px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+.fso-app .fso-chat form.chat-composer > button.chat-tool-active { color: var(--button); background: var(--danger-bg); }
+.fso-app .fso-chat form.chat-composer input[aria-label="Message"] { font-size: 14px; }
+.fso-app .fso-chat .chat-composer-send { width: 42px; min-width: 42px; height: 42px; min-height: 42px; flex-basis: 42px; border: 0; border-radius: 50%; background: var(--button); color: #fff; }
+.fso-app .fso-chat .chat-composer-send:disabled { opacity: .5; }
+
+/* Floating tab bar */
+/* Floating rounded tab bar spanning the content width; active tab red on a soft pill. */
+.fso-tabbar { position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 1100; display: flex; gap: 6px; width: min(428px, calc(100% - 32px)); padding: 6px; transform: translateX(-50%); border: 1px solid var(--border); border-radius: 30px; background: var(--card); box-shadow: 0 8px 28px #1f465026; }
+.fso-tabbar button { flex: 1; display: grid; justify-items: center; gap: 2px; min-height: 54px; padding: 6px; border: 0; border-radius: 24px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 600; }
+.fso-tabbar button.active { color: var(--button); background: var(--fso-soft); }
+.fso-tabbar button:hover { border: 0; }.fso-tab-icon { position: relative; display: grid; place-items: center; }
+.fso-tab-badge { position: absolute; top: -6px; right: -12px; display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--button); color: #fff; font-size: 10px; font-weight: 750; }
+
+.fso-app .live-field-pagination { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin: 14px 0 0; }
+.fso-app .live-field-pagination button { min-height: 40px; border-radius: 12px; }
+
+@media (prefers-reduced-motion: reduce) { .fso-app * { transition: none !important; } }

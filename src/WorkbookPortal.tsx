@@ -6,6 +6,7 @@ import { workbookIssueRules } from './workbookRules';
 import './workbook-portal.css';
 import LiveFsoWorkspace from './LiveFsoWorkspace';
 import LiveFieldReport from './LiveFieldReport';
+import LiveSupervisorWorkspace from './LiveSupervisorWorkspace';
 import './fso-app.css';
 import { workspaceGroups } from './workspaceGroups';
 import GroupCallProvider from './GroupCallProvider';
@@ -123,7 +124,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
   },[counterRevision,revision,counters]);
   useEffect(()=>{
     if(!supabase)return;
-    const label=page==='dashboard'?'Dashboard':page==='new'?'New Cases':page==='cases'?'Case Board':page==='reports'?'Reports':page==='intake'?'Raise a Case':workspaceGroups(profile).find(item=>item.key===page)?.label||page;
+    const label=page==='dashboard'?'Dashboard':page==='new'?'New Cases':page==='cases'?'Case Board':page==='reports'?'Reports':page==='intake'?'Raise a Case':page==='chats'?'Chats':workspaceGroups(profile).find(item=>item.key===page)?.label||page;
     const entry:Activity={id:crypto.randomUUID(),action:'Opened '+label,actor_name:profile.name,source_sheet:'',source_row:0,created_at:new Date().toISOString()};
     void supabase.rpc('portal_record_visit',{p_page:page}).then(result=>{
       if(result.error)setVisits(current=>[entry,...current].slice(0,6));
@@ -222,7 +223,7 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
     return()=>{alive=false;};
   },[page,revision,profile.email,profile.role]);
   useEffect(()=>{
-      if(page==='audit'||page==='dashboard'||page.startsWith('group:')||page==='updates'||page==='intake'){setLoading(false);return;}
+      if(page==='audit'||page==='dashboard'||page.startsWith('group:')||page==='updates'||page==='intake'||page==='chats'){setLoading(false);return;}
     let alive=true;const controller=new AbortController();setLoading(true);setError('');setRows([]);
     const timer=window.setTimeout(()=>{
       void(async()=>{
@@ -343,6 +344,45 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
           </>}
       </div>
       {!selected&&!fieldReportItem&&<nav className="fso-tabbar" aria-label="Field app navigation">{tabs.map(([key,label,Icon,count])=><button key={key} className={page===key?'active':''} aria-current={page===key?'page':undefined} onClick={()=>navigate(key)}><span className="fso-tab-icon"><Icon size={20}/>{count>0&&<span className="fso-tab-badge">{count}</span>}</span>{label}</button>)}</nav>}
+    </GroupCallProvider>;
+  }
+
+  if(profile.role==='SFSO'){
+    // City supervisors get the same phone-first field app layout; every desk action stays in the case detail screen.
+    const openCaseChat=(item:WorkbookCase)=>{
+      const target=groups.find(entry=>entry.kind==='company'&&entry.value===item.company)||groups.find(entry=>entry.kind==='city'&&entry.value===(item.city==='Rawalpindi'?'Islamabad':item.city));
+      if(target){navigate(target.key);setConversationCase(item);}else setNotice('No conversation group is configured for this case.');
+    };
+    const chatUnread=groups.reduce((sum,item)=>sum+(unread[item.key]||0),0);
+    const inChats=page==='chats'||!!group;
+    const tabs:[string,string,typeof BriefcaseBusiness,number,boolean][]=[['cases','Cases',Columns3,0,page==='cases'],['chats','Chats',MessagesSquare,chatUnread,inChats],['reports','Reports',ChartNoAxesCombined,0,page==='reports']];
+    return <GroupCallProvider profile={profile} light={light}>
+      <DirectVoiceCalls profile={profile} open={directCallsOpen} groupKey={group?.key} onClose={()=>setDirectCallsOpen(false)}/>
+      {locationItem&&<LiveLocationModal item={locationItem} onClose={()=>setLocationItem(null)}/>}
+      {reportItem&&<LiveCaseReport item={reportItem} profile={profile} onClose={()=>setReportItem(null)}/>}
+      <div className={'fso-app'+(group&&!selected?' fso-app-chat fso-app-chat-back':'')+(selected?' fso-app-subpage':'')}>
+        {notice&&<div className="fso-notice" role="status">{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={14}/></button></div>}
+        {setupError&&<div className="fso-error" role="alert">{setupError}</div>}
+        {counterError&&<div className="fso-error" role="alert">Workflow/chat setup: {counterError}</div>}
+        {selected?<div className="fso-screen fso-detail"><CaseDetail key={workbookKey(selected)} item={selected} profile={profile} onChange={()=>{setCounterRevision(value=>value+1);setRevision(value=>value+1);}} onBack={()=>setSelected(null)} onConversation={openCaseChat}/></div>
+          :group?<><div className="fso-subheader fso-chat-back"><button onClick={()=>navigate('chats')}><ChevronLeft size={18}/>Chats</button><span/><span/></div><LiveGroupChat key={group.key} variant="mobile" onOpenCase={setSelected} onStartDirectCall={()=>setDirectCallsOpen(true)} profile={profile} group={group} caseContext={conversationCase} onRead={()=>setCounterRevision(value=>value+1)}/></>
+          :page==='chats'?<div className="fso-screen">
+            <section className="fso-officer-card" aria-label="Chats"><div><small>COMMUNICATION</small><h1>Chats</h1><span className="fso-duty ready"><i/>{groups.length} groups</span></div><div className="fso-officer-tools">{accountMenu}</div></section>
+            <div className="fso-chat-list">{groups.map(item=><button key={item.key} className="fso-chat-item" onClick={()=>navigate(item.key)}>
+              <span className="fso-chat-icon">{item.kind==='city'?<MessageSquareLock size={20}/>:<MessagesSquare size={20}/>}</span>
+              <span className="fso-chat-copy"><b>{item.label}</b><small>{item.kind==='city'?'Internal city operations':'Client company chat'}</small></span>
+              {(unread[item.key]||0)>0&&<span className="fso-tab-badge fso-chat-badge">{unread[item.key]}</span>}<ChevronRight size={18}/>
+            </button>)}</div>
+          </div>
+          :<>
+            <LiveSupervisorWorkspace mode={page==='reports'?'reports':'cases'} profile={profile} rows={rows} total={total} loading={loading} error={error}
+              filters={filters} options={options} counters={counters} summary={summary} summaryLoading={summaryLoading} accountMenu={accountMenu} exporting={exporting}
+              stageOf={getCaseBoardStage} onFilter={filter} onOpen={setSelected} onLocation={setLocationItem} onReport={setReportItem}
+              onExport={()=>void exportPage()} onReload={()=>setRevision(value=>value+1)}/>
+            {total>WORKBOOK_PAGE_SIZE&&pagination}
+          </>}
+      </div>
+      {!selected&&<nav className="fso-tabbar" aria-label="Supervisor app navigation">{tabs.map(([key,label,Icon,count,active])=><button key={key} className={active?'active':''} aria-current={active?'page':undefined} onClick={()=>navigate(key)}><span className="fso-tab-icon"><Icon size={20}/>{count>0&&<span className="fso-tab-badge">{count}</span>}</span>{label}</button>)}</nav>}
     </GroupCallProvider>;
   }
 

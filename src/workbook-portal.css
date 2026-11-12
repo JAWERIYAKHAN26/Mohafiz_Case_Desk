@@ -266,6 +266,14 @@
 .live-chat-bubble .chat-case-link { display:inline; min-height:0; margin:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--accent); font:inherit; font-weight:600; text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; text-align:left; }
 .chat-case-picker { padding:14px 18px; border-bottom:1px solid var(--border); }
 .chat-case-picker > button { display:block; margin-top:8px; max-width:100%; text-align:left; overflow-wrap:anywhere; }
+.chat-autocomplete { display:grid; gap:4px; max-height:220px; overflow:auto; margin:8px 18px 0; padding:6px; border:1px solid var(--border); border-radius:10px; background:var(--card); box-shadow:0 8px 24px #102b321c; }
+.chat-autocomplete > button { display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; padding:8px 10px; border:0; border-radius:6px; background:transparent; color:var(--text); text-align:left; }
+.chat-autocomplete > button:hover,.chat-autocomplete > button.active { background:var(--hover); }
+.chat-autocomplete > button b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chat-autocomplete > button small,.chat-autocomplete > small { color:var(--muted); }
+.chat-autocomplete > small { padding:8px 10px; }
+.live-chat-bubble .chat-mention { display:inline; padding:1px 4px; border-radius:4px; background:#dcefe9; color:#176653; font-weight:700; }
+.live-chat-bubble.is-mine .chat-mention { background:#ffffff26; color:#fff; }
 
 .desk.call-ui-root { position:fixed; inset:0; z-index:1200; pointer-events:none; display:block; min-height:0; background:transparent; }
 .call-ui-root button,.call-ui-root section,.call-ui-root .call-notice { pointer-events:auto; }

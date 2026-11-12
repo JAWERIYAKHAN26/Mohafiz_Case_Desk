@@ -187,10 +187,8 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
     let alive=true; setSummaryLoading(true); setSetupError('');
     void(async()=>{
       if(!supabase){if(alive){setSetupError('Database connection is unavailable.');setSummaryLoading(false);}return;}
-      const results=await Promise.allSettled([supabase.rpc('workbook_summary',{p_source_sha:WORKBOOK_SHA}),supabase.rpc('workbook_filter_options',{p_source_sha:WORKBOOK_SHA})]);
+      const summaryResult=await Promise.resolve(supabase.rpc('workbook_summary',{p_source_sha:WORKBOOK_SHA})).then(value=>({status:'fulfilled' as const,value}),reason=>({status:'rejected' as const,reason}));
       if(!alive)return;
-      const summaryResult=results[0], optionsResult=results[1];
-      const failures:string[]=[];
       const describeFailure=(result:typeof summaryResult)=>{
         const problem=result.status==='rejected'?result.reason:result.value.error;
         if(problem&&typeof problem==='object') {
@@ -201,22 +199,28 @@ export default function WorkbookPortal({ profile, light, onTheme, onLogout }: { 
         return 'Database request failed';
       };
       if(summaryResult.status==='fulfilled'&&!summaryResult.value.error)setSummary(summaryResult.value.data as WorkbookSummary);
-      else{setSummary(null);failures.push('Dashboard totals: '+describeFailure(summaryResult));}
-      if(optionsResult.status==='fulfilled'&&!optionsResult.value.error){
-        const data=optionsResult.value.data as Partial<Options>;
-        setOptions({
-          companies:[...(data.companies||[])].sort(),
-          cities:[...(data.cities||[])].sort(),
-          statuses:[...(data.statuses||[])].sort(),
-          priorities:[...(data.priorities||[])].sort(),
-          issues:[...new Set([...(data.issues||[]),...defaultIssues])].sort()
-        });
-      } else failures.push('Filter options: '+describeFailure(optionsResult));
-      setSetupError(failures.join(' | '));
+      else{setSummary(null);setSetupError('Dashboard totals: '+describeFailure(summaryResult));}
       setSummaryLoading(false);
     })().catch(()=>{if(alive){setSetupError('Could not connect to the database. Please retry.');setSummaryLoading(false);}});
     return()=>{alive=false;};
   },[revision,profile.email,profile.role]);
+  useEffect(()=>{
+    if(!supabase||!['cases','new','reports','intake'].includes(page))return;
+    let alive=true;
+    void Promise.resolve(supabase.rpc('workbook_filter_options',{p_source_sha:WORKBOOK_SHA})).then(result=>{
+      if(!alive)return;
+      if(result.error){setSetupError(previous=>[previous,'Filter options: '+databaseMessage(result.error)].filter(Boolean).join(' | '));return;}
+      const data=result.data as Partial<Options>;
+      setOptions({
+        companies:[...(data.companies||[])].sort(),
+        cities:[...(data.cities||[])].sort(),
+        statuses:[...(data.statuses||[])].sort(),
+        priorities:[...(data.priorities||[])].sort(),
+        issues:[...new Set([...(data.issues||[]),...defaultIssues])].sort()
+      });
+    },error=>{if(alive)setSetupError(previous=>[previous,'Filter options: '+databaseMessage(error)].filter(Boolean).join(' | '));});
+    return()=>{alive=false;};
+  },[page,revision,profile.email,profile.role]);
   useEffect(()=>{
       if(page==='audit'||page==='dashboard'||page.startsWith('group:')||page==='updates'||page==='intake'){setLoading(false);return;}
     let alive=true;const controller=new AbortController();setLoading(true);setError('');setRows([]);
